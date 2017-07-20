@@ -195,6 +195,12 @@ class espresso(Calculator):
                  refold_pos = None,
                  upscale = None,
                  bfgs_ndim = None,
+                 vdw_corr = None,
+                 ts_vdw_econv_thr = None,
+                 ts_vdw_isolated = None,
+                 lfcpopt = None,
+                 fcp_mu = None,
+                 esm_a = None,
                  trust_radius_max = None,
                  trust_radius_min = None,
                  trust_radius_ini = None,
@@ -569,6 +575,12 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         self.refold_pos = refold_pos
         self.upscale = upscale
         self.bfgs_ndim = bfgs_ndim
+        self.vdw_corr = vdw_corr
+        self.ts_vdw_econv_thr = ts_vdw_econv_thr
+        self.ts_vdw_isolated = ts_vdw_isolated
+        self.lfcpopt = lfcpopt
+        self.fcp_mu = fcp_mu
+        self.esm_a = esm_a
         self.trust_radius_max = trust_radius_max
         self.trust_radius_min = trust_radius_min
         self.trust_radius_ini = trust_radius_ini
@@ -578,7 +590,175 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         self.press_conv_thr = press_conv_thr
         self.results = results
         self.name = name
-
+        self.defaults=dict(    
+                 #atoms = None,
+                 pw = 350.0,
+                 dw = None,
+                 fw = None,
+                 nbands = -10,
+                 kpts = (1,1,1),
+                 kptshift = (0,0,0),
+                 fft_grid = None,   #if specified, set the keywrds nr1, nr2, nr3 in q.e. input [RK]
+                 #mode = 'ase3',
+                 opt_algorithm = 'ase3',
+                 nstep = None,
+                 constr_tol = None,
+                 fmax = 0.05,
+                 cell_dynamics = None,
+                 press = None, # target pressure
+                 dpress = None, # convergence limit towards target pressure
+                 cell_factor = None,
+                 cell_dofree = None,
+                 dontcalcforces = False,
+                 nosym = False,
+                 noinv = False,
+                 nosym_evc = False,
+                 no_t_rev = False,
+                 xc = 'PBE',
+                 beefensemble = False,
+                 printensemble = False,
+                 psppath = None,
+                 spinpol = False,
+                 noncollinear = False,
+                 spinorbit = False,
+                 outdir = None,
+                 txt = None,
+                 calcstress = False,
+                 smearing = 'fd',
+                 sigma = 0.1,
+                 fix_magmom = False,
+                 isolated = None,
+                 U = None,
+                 J = None,
+                 U_alpha = None,
+                 U_projection_type = 'atomic',
+                 nqx1 = None,
+                 nqx2 = None,
+                 nqx3 = None,
+                 exx_fraction = None,
+                 screening_parameter = None,
+                 exxdiv_treatment = None,
+                 ecutvcut = None,
+                 tot_charge = None, # +1 means 1 e missing, -1 means 1 extra e
+                 #charge = None, # overrides tot_charge (ase 3.7+ compatibility)
+                 tot_magnetization = -1, #-1 means unspecified, 'hund' means Hund's rule for each atom
+                 occupations = 'smearing', # 'smearing', 'fixed', 'tetrahedra'
+                 dipole = {'status':False},
+                 field = {'status':False},
+                 output = {'disk_io':'default',  # how often espresso writes wavefunctions to disk
+                           'avoidio':False,  # will overwrite disk_io parameter if True
+                           'removewf':True,
+                           'removesave':False,
+                           'wf_collect':False},
+                 convergence = {'energy':1e-6,
+                                'mixing':0.7,
+                                'maxsteps':100,
+                                'diag':'david'},
+                 startingpot = None,
+                 startingwfc = None,
+                 ion_positions = None,
+                 parflags = None,
+                 onlycreatepwinp = None, #specify filename to only create pw input
+                 single_calculator = True, #if True, only one espresso job will be running
+                 #procrange = None, #let this espresso calculator run only on a subset of the requested cpus
+                 #numcalcs = None,  #used / set by multiespresso class
+                 #alwayscreatenewarrayforforces = True,
+                 verbose = 'low',
+                 #automatically generated list of parameters
+                 #some coincide with ase-style names
+                 iprint = None,
+                 tstress = None,
+                 tprnfor = None,
+                 dt = None,
+                 lkpoint_dir = None,
+                 max_seconds = None,
+                 etot_conv_thr = None,
+                 forc_conv_thr = None,
+                 tefield = None,
+                 dipfield = None,
+                 lelfield = None,
+                 nberrycyc = None,
+                 lorbm = None,
+                 lberry = None,
+                 gdir = None,
+                 nppstr = None,
+                 nbnd = None,
+                 ecutwfc = None,
+                 ecutrho = None,
+                 ecutfock = None,
+                 force_symmorphic = None,
+                 use_all_frac = None,
+                 one_atom_occupations = None,
+                 starting_spin_angle = None,
+                 degauss = None,
+                 nspin = None,
+                 ecfixed = None,
+                 qcutz = None,
+                 q2sigma = None,
+                 x_gamma_extrapolation = None,
+                 lda_plus_u = None,
+                 lda_plus_u_kind = None,
+                 edir = None,
+                 emaxpos = None,
+                 eopreg = None,
+                 eamp = None,
+                 clambda = None,
+                 report = None,
+                 lspinorb = None,
+                 esm_bc = None,
+                 esm_w = None,
+                 esm_efield = None,
+                 esm_nfit = None,
+                 london = None,
+                 london_s6 = None,
+                 london_rcut = None,
+                 xdm = None,
+                 xdm_a1 = None,
+                 xdm_a2 = None,
+                 electron_maxstep = None,
+                 scf_must_converge = None,
+                 conv_thr = None,
+                 adaptive_thr = None,
+                 conv_thr_init = None,
+                 conv_thr_multi = None,
+                 mixing_beta = None,
+                 mixing_ndim = None,
+                 mixing_fixed_ns = None,
+                 ortho_para = None,
+                 diago_thr_init = None,
+                 diago_cg_maxiter = None,
+                 diago_david_ndim = None,
+                 diago_full_acc = None,
+                 efield = None,
+                 tqr = None,
+                 remove_rigid_rot = None,
+                 tempw = None,
+                 tolp = None,
+                 delta_t = None,
+                 nraise = None,
+                 refold_pos = None,
+                 upscale = None,
+                 bfgs_ndim = None,
+                 vdw_corr = None,
+                 ts_vdw_econv_thr = None,
+                 ts_vdw_isolated = None,
+                 lfcpopt = None,
+                 fcp_mu = None,
+                 esm_a = None,
+                 trust_radius_max = None,
+                 trust_radius_min = None,
+                 trust_radius_ini = None,
+                 w_1 = None,
+                 w_2 = None,
+                 wmass = None,
+                 press_conv_thr = None,
+                 results = {},
+                 name = 'espresso',
+                 #restart=None,
+                 #ignore_bad_restart_file=False,
+                 #label=None,
+                 command=None,
+                 ) 
 
         #give original espresso style input names
         #preference over ase / dacapo - style names
@@ -593,9 +773,13 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         self.nvalence=None
         self.nel = None
         self.fermi_input = False
+
+        self.parameters = {}
+
+
         # Auto create variables from input
         self.input_update()
-
+        self.parameters = self.todict()
         # Initialize lists of cpu subsets if needed
         if procrange is None:
             self.proclist = False
@@ -947,6 +1131,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             print >>f, '  gdir='+str(self.gdir)+','
         if self.nppstr is not None:
             print >>f, '  nppstr='+str(self.nppstr)+','
+        if self.lfcpopt is not None:
+            print >>f, '  lfcpopt='+bool2str(self.lfcpopt)+','
 
 
         ### &SYSTEM ###
@@ -1204,7 +1390,16 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             print >>f, '  xdm_a1='+num2str(self.xdm_a1)+','
         if self.xdm_a2 is not None:
             print >>f, '  xdm_a2='+num2str(self.xdm_a2)+','
-
+        if self.vdw_corr is not None:
+            print >>f, '  vdw_corr=\''+self.vdw_corr+'\','
+        if self.ts_vdw_econv_thr is not None:
+            print >>f, '  ts_vdw_econv_thr='+num2str(self.ts_vdw_econv_thr)+','
+        if self.ts_vdw_isolated is not None:
+            print >>f, '  ts_vdw_isolated='+bool2str(self.tsw_vdw_isolated)+','
+        if self.fcp_mu is not None:
+            print >>f, '  fcp_mu='+num2str(self.fcp_mu)+','
+        if self.esm_a is not None:
+            print >>f, '  esm_a='+num2str(self.esm_a)+','
 
         ### &ELECTRONS ###
         print >>f,'/\n&ELECTRONS'
@@ -3310,7 +3505,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             vac_pos1 = (vacuum_pos - cell_length*eopreg*2.5) % cell_length
             vac_pos2 = (vacuum_pos + cell_length*eopreg*2.5) % cell_length
             vac_index1 = np.abs(np.array(average_data)[..., 0] - vac_pos1).argmin()
-            vac_index1 = np.abs(np.array(average_data)[..., 0] - vac_pos2).argmin()
+            vac_index2 = np.abs(np.array(average_data)[..., 0] - vac_pos2).argmin()
             vacuum_energy1 = average_data[vac_index1][1]
             vacuum_energy2 = average_data[vac_index2][1]
             wf = [vacuum_energy1 * rydberg - fermi_energy, vacuum_energy2 * rydberg - fermi_energy]
@@ -3394,3 +3589,13 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             return self.forces.copy()
         else:
             return self.forces
+           
+    def todict(self,only_nondefaults=False):
+        from collections import OrderedDict
+	input_parameters = OrderedDict()
+        for item in self.defaults.keys():
+            if self.defaults[item] == getattr(self,item) and only_nondefaults==True:
+                pass
+            else:
+                input_parameters[item]= getattr(self,item)
+        return input_parameters
