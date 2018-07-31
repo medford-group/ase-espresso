@@ -2957,6 +2957,23 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             plot=[['fileout',self.topath(xsf)]],
             parallel=False, log='charge.log')
 
+    def cube_charge_density(self, cube, spin='both'):
+        """
+        Writes the charge density from a DFT calculation
+        to gaussian cube file.
+        """
+        if spin=='both' or spin==0:
+            s = 0
+        elif spin=='up' or spin==1:
+            s = 1
+        elif spin=='down' or spin==2:
+            s = 2
+        else:
+            raise ValueError, 'unknown spin component'
+        self.run_ppx('charge.inp',
+           inputpp=[['plot_num',0],['spin_component',s]],
+            plot=[['fileout',self.topath(cube)],['nx',nx],['ny',ny],['nz',nz]],
+            parallel=False, log='charge.log',output_format=6)
 
     def extract_total_potential(self, spin='both'):
         """
@@ -3112,6 +3129,16 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             inputpp=[['plot_num',6]],
             plot=[['fileout',self.topath(xsf)]],
             parallel=False, log='magdens.log')
+
+    def cube_magnetization_density(self, cube):
+        """
+        Writes the magnetization density from a DFT calculation
+        to a Gaussian Cube file.
+        """
+        self.run_ppx('magdens.inp',
+            inputpp=[['plot_num',6]],
+            plot=[['fileout',self.topath(cube)]],
+            parallel=False, log='magdens.log',output_format=6)
 
 
     def extract_wavefunction_density(self, band, kpoint=0, spin='up',
@@ -3489,7 +3516,137 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             inputpp=[['plot_num',20]],
             plot=[['fileout',self.topath(xsf)]],
             parallel=False, log='mideig.log')
+    
+    def get_dipole_moment(self,charge_type='DDEC6'):
+        """ function to calculate the total dipole of a system in chargemol"""
+        from ase.data import atomic_numbers
+        nx,ny,nz = [int(np.ceil(np.linalg.norm(a)/0.1)) for a in self.atoms.cell]
 
+        self.xsf_charge_density(self.outdir+'/up.xsf',spin='up')#make the xsfs
+        self.xsf_charge_density(self.outdir+'/down.xsf',spin='down')
+        #get information about the number of valence electrons from logfile
+        with open(self.log,'r') as p:
+            s = p.read()
+            p.close()
+        s = s.split('atomic species   valence    mass     pseudopotential\n')[-1]
+        s = s.rsplit('Starting magnetic structure')[0].strip()
+        species_dict = {}
+        for line in s.split('\n'): # dict w/ {atomic_species: [# of valence e, atomic #]}
+            species_dict[line.split()[0]] = [line.split()[1],
+            str(atomic_numbers[''.join([i for i in line.split()[0] if not i.isdigit()])])]
+        print(species_dict)
+        cur_dir = os.getcwd()
+        os.chdir(self.outdir)
+        #we need to convert atomic symbols to atomic numbers in the .xsf file
+        f = open('up.xsf','r')
+        s = f.read()
+        f.close()
+        for species in species_dict.keys():
+            s = s.replace(species,species_dict[species][1])
+        s = s.replace('DATAGRID_3D_UNKNOWN','BEGIN_DATAGRID_3D_RHO:spin_1',1)
+        s = s.replace('END_BLOCK_DATAGRID_3D','')
+        #the datagrid just needs to have the above name
+        f = open('up.xsf','w')
+        f.write(s)
+        f.close()
+        del f
+        f = open('down.xsf')
+        s = f.readreadlines()[8+len(self.atoms):]
+        f.close()
+        s[1] = 'BEGIN_DATAGRID_3D_RHO:spin_2'
+        f = open('down.xsf','w')
+        f.write(s)
+        f.close()
+        os.system('cat up.xsf down.xsf > total.xsf')
+        
+
+        #write Chargemol input file
+        f = open('job_control.txt','w')
+        f.write('<net charge>\n')
+        if self.tot_charge != None:
+            f.write(str(self.tot_charge+'\n'))
+        else:
+            f.write('0\n')
+        f.write('</net charge>\n')
+        f.write('<periodicity along A, B, and C vectors>\n.true.\n.true.\n.true.\n')
+        f.write('</periodicity along A, B, and C vectors>\n')
+        f.write('<atomic densities directory complete path>\n')
+        f.write('/nv/hp13/bcomer3/chargemol_09_26_2017/atomic_densities/\n')
+        f.write('</atomic densities directory complete path>\n')
+        f.write('<input filename>\ntotal.xsf\n</input filename>\n')
+        f.write('<charge type>\n'+charge_type+'\n</charge type>\n')
+        f.write('<number of core electrons>')
+        for sp in species_dict.keys(): #you need to write in '[atomic number] [core electrons]'
+            f.write('\n'+species_dict[sp][1]+'  '+ str(int(float(species_dict[sp][1])-float(species_dict[sp][0]))))
+        f.write('\n</number of core electrons>\n')
+        f.close()
+
+        #run Chargemol, serial is fast enough, make sure you have this code in your path
+        try:
+            os.system('Chargemol')
+        except:
+            try:
+                chargemol_status = os.system('Chargemol_09_26_2017_linux_serial')
+            except:
+                print('unable to run chargemol, ensure chargemol is in your PATH environment variable. This code attempts to run (in serial mode) Chargemol then Chargemol_09_26_2017_linux_serial. If you do not have the chargemol executable it may be obtained at https://sourceforge.net/projects/ddec/files/')
+        #parse the Chargemol output file
+        with open(charge_type+'_even_tempered_net_atomic_charges.xyz','r') as f:
+            txt = f.read()
+        txt,_ = txt.split('The sperically averaged')
+        _,txt = txt.split('traceless quadrupole moment tensor')
+        atm_dipoles =  []
+        charges = []
+        positions = []
+        for line in txt.split('\n')[1:-2]: #Parse Chargemol file
+            atm_dipoles.append(line.split()[6:9])
+            charges.append(line.split()[5])
+            positions.append(line.split()[2:5])
+
+        #calculate the total dipole
+        atm_dipoles = np.asarray(atm_dipoles,dtype=np.float)
+        positions = np.asarray(positions,dtype=np.float)
+        charges = np.asarray(charges,dtype=np.float)
+        charges = charges.reshape(len(charges),1)
+        dipoles = atm_dipoles+positions*charges
+
+        net_dipole = np.sum(dipoles.astype(np.float),axis=0)
+        os.chdir(cur_dir)
+        return net_dipole
+
+       
+    def Bader_Analysis(self, quantity='charge'):
+        """
+        runs Bader charge analysis using Henkelman Group code. Ensure the bader executable is
+        in your PATH environment variable.
+        
+        returns numpy array containing the net charges of each species in order of their index
+        """
+        cur_dir = os.getcwd()
+        if quantity=='charge':
+            dump_file = 'charge_density.cube'
+            self.cube_charge_density(self.outdir+'/'+dump_file)
+        elif quantity=='magnetization':
+            dump_file = 'magnetization_density.cube'
+            self.cube_magnetization_density(self.outdir+'/'+dump_file)
+        try:
+            os.chdir(self.outdir)
+            os.system('bader '+dump_file+' > bader.log') 
+            os.wait(30)
+            os.chdir(cur_dir)
+        except:
+            os.chdir(cur_dir) 
+            print("there was a problem running the bader executable, make sure the bader executable is in your PATH environment variable. If you do not have the executable, it can be located at http://theory.cm.utexas.edu/henkelman/code/bader/")
+        with  open(self.outdir + '/ACF.dat') as f:
+            l = f.readlines()
+        bader_output = []
+        valences,valence_dict = self.get_nvalence()
+        for line in l[2:-4]:
+            bader_output.append(float(line.split()[4]))  #note that bader gives the number of 
+        if quantity=='charge':                           #electrons associated with a nucleus, not
+            bader_charges=-np.array(bader_output)+valences#net charge
+        else:
+            bader_charges=np.array(bader_output)
+        return bader_charges
 
     def find_max_empty_space(self, edir=3):
         """
