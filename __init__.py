@@ -3599,3 +3599,5 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             else:
                 input_parameters[item]= getattr(self,item)
         return input_parameters
+    def echo():
+        print('echo')
