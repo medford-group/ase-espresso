@@ -48,6 +48,7 @@ class espresso(Calculator):
 
     def __init__(self,
                  atoms = None,
+                 exedir='',  #espresso binary folder, if "./" just take the current environmental variable
                  pw = 350.0,
                  dw = None,
                  fw = None,
@@ -214,6 +215,8 @@ class espresso(Calculator):
                  ignore_bad_restart_file=False,
                  label=None,
                  command=None,
+                 ####ENVIRON PART (credit Stefan Ringe)
+                 environ_keys=None, #Environ keys given as dictionary, if given use_environ=True
                  ):
         """
     Construct an ase-espresso calculator.
@@ -410,6 +413,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
      verbose ('low')
         Can be 'high' or 'low'
         """
+        self.exedir=exedir
+        print 'starting calculation',self.exedir
 
         self.outdir= outdir
         self.onlycreatepwinp = onlycreatepwinp
@@ -445,8 +450,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         self.xc = xc
         self.beefensemble = beefensemble
         self.printensemble = printensemble
-        if type(smearing)==str:
-            self.smearing = smearing
+        if isinstance(smearing, (str, unicode)):
+            self.smearing = str(smearing)
             self.sigma = sigma
         else:
             self.smearing = smearing[0]
@@ -485,10 +490,21 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         self.exxdiv_treatment = exxdiv_treatment
         self.ecutvcut = ecutvcut
         self.newforcearray = alwayscreatenewarrayforforces
-        if parflags is None:
-            self.parflags = ''
+        self.parflags=''
+        self.serflags=''
+        #ENVIRON IMPLICIT SOLVATION
+        if environ_keys is not None:
+            self.parflags=' -environ '
+            self.serflags=' -environ '
+            self.environ_keys=environ_keys
+            self.use_environ=True
         else:
-            self.parflags = parflags
+            self.parflags=''
+            self.serflags=''
+            self.use_environ=False
+        if parflags is not  None:
+            self.parflags += parflags
+        print 'current keys',self.parflags, self.serflags
         self.single_calculator = single_calculator
         self.txt = txt
 
@@ -1031,6 +1047,28 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             nvalence[i] = nel[self.specdict[x[0]].s]
         return nvalence, nel
 
+    def writeenvinputfile(self, filename='environ.in'):
+	"""Write Environ input file"""
+        if self.cancalc:
+            fname = self.localtmp+'/'+filename
+            #f = open(self.localtmp+'/pw.inp', 'w')
+        else:
+            fname = self.pwinp.split('/')[:-1]+'/'+filename
+	f = open(fname,'w')
+	f.write(' &ENVIRON\n')
+	f.write('   !\n')
+	for key in self.environ_keys:
+	    value=self.environ_keys[key]
+	    if type(value)==str:
+	        f.write('   {} = \'{}\'\n'.format(key, self.environ_keys[key]))
+	    elif 'e' in str(value):
+		value_str=str(value).replace('e','D')
+	        f.write('   {} = {}\n'.format(key, value_str))
+	    else:
+	        f.write('   {} = {}\n'.format(key, self.environ_keys[key]))
+	f.write('   !\n')
+	f.write(' /')
+	f.close()
 
     def writeinputfile(self, filename='pw.inp', mode=None,
         overridekpts=None, overridekptshift=None, overridenbands=None,
@@ -1174,7 +1212,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                 self.nbnd = int(self.nbands)
             else:
             #if self.nbands is negative create -self.nbands extra bands
-                if self.nvalence == None:
+                if self.nvalence is None:
                      self.nvalence, self.nel =  self.get_nvalence()
                 if self.noncollinear:
                     self.nbnd = int(np.sum(self.nvalence)-self.nbands*2.)
@@ -1567,7 +1605,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             kp = self.kpts
         else:
             kp = overridekpts
-        if kp == 'gamma':
+        if kp is 'gamma':
             print >>f, 'K_POINTS Gamma'
         else:
             x = np.shape(kp)
@@ -1678,7 +1716,11 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             self.writeversion = False
             s = open(self.log,'a')
             s.write('  python dir          : '+self.mypath+'\n')
-            exedir = os.path.dirname(os.popen('which pw.x').readline())
+            print 'the exedir=',self.exedir
+            if len(self.exedir) == 0:
+                exedir = os.path.dirname(os.popen('which pw.x').readline())
+            else:
+                exedir=self.exedir
             s.write('  espresso dir        : '+exedir+'\n')
             s.write('  pseudo dir          : '+self.psppath+'\n')
             s.write('  ase-espresso py git : '+gitver+'\n\n\n')
@@ -1840,7 +1882,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             if self.calcmode in ('relax','vc-relax','vc-md','md'):
                 if self.opt_algorithm == 'ase3':
                     self.stop()
-                p = os.popen('grep -n "!    total" '+self.log+' | tail -1','r')
+                p = os.popen('grep -a -n "!    total" '+self.log+' | tail -1','r')
                 n = int(p.readline().split(':')[0])-1
                 p.close()
                 f = open(self.log,'r')
@@ -1905,6 +1947,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             self.natoms = len(self.atoms)
             #self.spos = zip(s, a.get_scaled_positions()) # UPDATE to have species indices
             self.check_spinpol()
+	    if self.use_environ:
+	        self.writeenvinputfile()
             self.writeinputfile()
         if self.cancalc:
             self.start()
@@ -1934,26 +1978,36 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                 cdir = os.getcwd()
                 os.chdir(self.localtmp)
                 os.system(site.perHostMpiExec+' cp '+self.localtmp+'/pw.inp '+self.scratch)
+		if self.use_environ:
+                    os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in '+self.scratch)
+	
                 if self.calcmode!='hund':
                     if not self.proclist:
-                        self.cinp, self.cout = site.do_perProcMpiExec(self.scratch,'pw.x '+self.parflags+' -in pw.inp')
+                        self.cinp, self.cout = site.do_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.parflags+' -in pw.inp')
                     else:
-                        self.cinp, self.cout, self.cerr = site.do_perSpecProcMpiExec(self.mycpus,self.myncpus,self.scratch,'pw.x '+self.parflags+' -in pw.inp|'+self.mypath+'/espfilter '+str(self.natoms)+' '+self.log+'0')
+                        self.cinp, self.cout, self.cerr = site.do_perSpecProcMpiExec(self.mycpus,self.myncpus,self.scratch,self.exedir+'pw.x '+self.parflags+' -in pw.inp|'+self.mypath+'/espfilter '+str(self.natoms)+' '+self.log+'0')
                 else:
-                    site.runonly_perProcMpiExec(self.scratch,' pw.x -in pw.inp >>'+self.log)
+                    site.runonly_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.serflags+' -in pw.inp >>'+self.log)
                     os.system("sed s/occupations.*/occupations=\\'fixed\\',/ <"+self.localtmp+"/pw.inp | sed s/ELECTRONS/ELECTRONS\\\\n\ \ startingwfc=\\'file\\',\\\\n\ \ startingpot=\\'file\\',/ | sed s/conv_thr.*/conv_thr="+num2str(self.conv_thr)+",/ | sed s/tot_magnetization.*/tot_magnetization="+num2str(self.totmag)+",/ >"+self.localtmp+"/pw2.inp")
                     os.system(site.perHostMpiExec+' cp '+self.localtmp+'/pw2.inp '+self.scratch)
-                    self.cinp, self.cout = site.do_perProcMpiExec(self.scratch,'pw.x '+self.parflags+' -in pw2.inp')
+		    if self.use_environ:
+			os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in '+self.scratch)
+                    self.cinp, self.cout = site.do_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.parflags+' -in pw2.inp')
                 os.chdir(cdir)
             else:
                 os.system('cp '+self.localtmp+'/pw.inp '+self.scratch)
+		if self.use_environ:
+	  	    os.system('cp '+self.localtmp+'/environ.in '+self.scratch)	
                 if self.calcmode!='hund':
-                    self.cinp, self.cout = os.popen2('cd '+self.scratch+' ; '+'pw.x -in pw.inp')
+                    self.cinp, self.cout = os.popen2('cd '+self.scratch+' ; '+self.exedir+'pw.x '+self.serflags+' -in pw.inp')
                 else:
-                    os.system('cd '+self.scratch+' ; '+' pw.x -in pw.inp >>'+self.log)
+                    os.system('cd '+self.scratch+' ; '+self.exedir+'pw.x '+self.serflags+' -in pw.inp >>'+self.log)
                     os.system("sed s/occupations.*/occupations=\\'fixed\\',/ <"+self.localtmp+"/pw.inp | sed s/ELECTRONS/ELECTRONS\\\\n\ \ startingwfc=\\'file\\',\\\\n\ \ startingpot=\\'file\\',/ | sed s/conv_thr.*/conv_thr="+num2str(self.conv_thr)+",/ | sed s/tot_magnetization.*/tot_magnetization="+num2str(self.totmag)+",/ >"+self.localtmp+"/pw2.inp")
                     os.system('cp '+self.localtmp+'/pw2.inp '+self.scratch)
-                    self.cinp, self.cout = os.popen2('cd '+self.scratch+' ; '+'pw.x -in pw2.inp')
+		    if self.use_environ:
+                        os.system('cp '+self.localtmp+'/environ.in '+self.scratch)
+
+                    self.cinp, self.cout = os.popen2('cd '+self.scratch+' ; '+self.exedir+'pw.x '+self.serflags+' -in pw2.inp')
 
             self.started = True
 
@@ -2125,7 +2179,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
 
         self.stop()
 
-        p = os.popen('grep -n Giannozzi '+self.log+'| tail -1','r')
+        p = os.popen('grep -a -n Giannozzi '+self.log+'| tail -1','r')
         n = int(p.readline().split()[0].strip(':'))
         p.close()
 
@@ -2203,7 +2257,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
     def get_nonselfconsistent_energies(self, type='beefvdw'):
         #assert self.xc is 'BEEF'
         self.stop()
-        p = os.popen('grep -32 "BEEF-vdW xc energy contributions" '+self.log+' | tail -32','r')
+        p = os.popen('grep -a -32 "BEEF-vdW xc energy contributions" '+self.log+' | tail -32','r')
         s = p.readlines()
         p.close()
         xc = np.array([])
@@ -2225,7 +2279,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
 
         self.stop()
 
-        p = os.popen('grep -3 "total   stress" '+self.log+' | tail -3','r')
+        p = os.popen('grep -a -3 "total   stress" '+self.log+' | tail -3','r')
         s = p.readlines()
         p.close()
 
@@ -2259,10 +2313,10 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         Units are Bohr magnetons per unit cell, directly read PWscf log.
         Returns (0,0) if no magnetization is found in log.
         """
-        p1 = os.popen('grep "total magnetization" '+self.log+' | tail -1','r')
+        p1 = os.popen('grep -a "total magnetization" '+self.log+' | tail -1','r')
         s1 = p1.readlines()
         p1.close()
-        p2 = os.popen('grep "absolute magnetization" '+self.log+' | tail -1','r')
+        p2 = os.popen('grep -a "absolute magnetization" '+self.log+' | tail -1','r')
         s2 = p2.readlines()
         p2.close()
 
@@ -2282,14 +2336,14 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         return self.ST
 
     def checkerror(self):
-        p = os.popen('grep -n Giannozzi '+self.log+' | tail -1','r')
+        p = os.popen('grep -a -n Giannozzi '+self.log+' | tail -1','r')
         try:
             n = int(p.readline().split()[0].strip(':'))
         except:
             raise RuntimeError, 'Espresso executable doesn\'t seem to have been started.'
         p.close()
 
-        p = os.popen(('tail -n +%d ' % n)+self.log+' | grep -n %%%%%%%%%%%%%%%% |tail -2','r')
+        p = os.popen(('tail -n +%d ' % n)+self.log+' | grep -a -n %%%%%%%%%%%%%%%% |tail -2','r')
         s = p.readlines()
         p.close()
 
@@ -2408,17 +2462,23 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             cdir = os.getcwd()
             os.chdir(self.localtmp)
             os.system(site.perHostMpiExec+' cp '+self.localtmp+'/'+inp+' '+self.scratch)
+	    if self.use_environ:
+                os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in'+' '+self.scratch)
+
             if piperead:
                 p = site.do_perProcMpiExec_outputonly(self.scratch, binary+' '+self.parflags+' -in '+inp+ll)
             else:
                 site.runonly_perProcMpiExec(self.scratch, binary+' '+self.parflags+' -in '+inp+ll)
             os.chdir(cdir)
         else:
+	    if self.use_environ:
+                os.system('cp '+self.localtmp+'/environ.in'+' '+self.scratch)
+
             os.system('cp '+self.localtmp+'/'+inp+' '+self.scratch)
             if piperead:
-                p = os.popen('cd '+self.scratch+' ; '+binary+' -in '+inp+ll)
+                p = os.popen('cd '+self.scratch+' ; '+binary+' '+self.serflags+' -in '+inp+ll)
             else:
-                os.system('cd '+self.scratch+' ; '+binary+' -in '+inp+ll)
+                os.system('cd '+self.scratch+' ; '+binary+' '+self.serflags+' -in '+inp+ll)
         if piperead:
             return p
 
@@ -2452,10 +2512,10 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         f.close()
 
         if piperead:
-            return self.run_espressox('pp.x', inp, log=log,
+            return self.run_espressox(self.exedir+'pp.x', inp, log=log,
                 piperead=piperead, parallel=parallel)
         else:
-            self.run_espressox('pp.x', inp, log=log, parallel=parallel)
+            self.run_espressox(self.exedir+'pp.x', inp, log=log, parallel=parallel)
 
 
     def get_fermi_level(self):
@@ -2463,7 +2523,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             return self.inputfermilevel
         self.stop()
         try:
-            p = os.popen('grep Fermi '+self.log+'|tail -1', 'r')
+            p = os.popen('grep -a Fermi '+self.log+'|tail -1', 'r')
             efermi = float(p.readline().split()[-2])
             p.close()
         except:
@@ -2524,13 +2584,15 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             if not hasattr(self, 'natoms'):
                 self.atoms2species()
                 self.natoms = len(self.atoms)
+	    if self.use_environ:
+		self.writeenvinputfile()
             self.writeinputfile(filename='pwnscf.inp',
                 mode='nscf', usetetrahedra=tetrahedra, overridekpts=kpts,
                 overridekptshift=kptshift, overridenbands=nbands,
                 suppressforcecalc=True)
-            self.run_espressox('pw.x', 'pwnscf.inp', 'pwnscf.log')
+            self.run_espressox(self.exedir+'pw.x', 'pwnscf.inp', 'pwnscf.log')
             if nscf_fermilevel:
-                p = os.popen('grep Fermi '+self.localtmp+'/pwnscf.log|tail -1', 'r')
+                p = os.popen('grep -a Fermi '+self.localtmp+'/pwnscf.log|tail -1', 'r')
                 efermi = float(p.readline().split()[-2])
                 p.close()
 
@@ -2627,12 +2689,14 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         oldnosym = self.nosym
         self.noinv = True
         self.nosym = True
+	if self.use_environ:
+	    self.writeenvinputfile()
         self.writeinputfile(filename='pwnscf.inp',
             mode='nscf', overridekpts=kptpath,
             overridenbands=nbands, suppressforcecalc=True)
         self.noinv = oldnoinv
         self.nosym = oldnosym
-        self.run_espressox('pw.x', 'pwnscf.inp', 'pwnscf.log')
+        self.run_espressox(self.exedir+'pw.x', 'pwnscf.inp', 'pwnscf.log')
 
         energies = self.get_eigenvalues(efermi=efermi)
 
@@ -2661,7 +2725,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
 
     def __get_atomic_projections__(self):
         f = open(self.scratch+'/calc.save/atomic_proj.xml', 'r')
-        p = os.popen('grep -n Giannozzi '+self.localtmp+'/pdos.log|tail -1','r')
+        p = os.popen('grep -a -n Giannozzi '+self.localtmp+'/pdos.log|tail -1','r')
         n = p.readline().split()[0].strip(':').strip()
         p.close()
         p = os.popen('tail -n +'+n+' '+self.localtmp+'/pdos.log|grep "state #"', 'r')
@@ -2739,17 +2803,17 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         self.stop()
 
         if self.spinpol:
-            p = os.popen("grep eigenval1.xml "+self.scratch+"/calc.save/data-file.xml|tr '\"' ' '|awk '{print $(NF-1)}'", 'r')
+            p = os.popen("grep -a eigenval1.xml "+self.scratch+"/calc.save/data-file.xml|tr '\"' ' '|awk '{print $(NF-1)}'", 'r')
             kptdirs1 = [x.strip() for x in p.readlines()]
             p.close()
             kptdirs1.sort()
-            p = os.popen("grep eigenval2.xml "+self.scratch+"/calc.save/data-file.xml|tr '\"' ' '|awk '{print $(NF-1)}'", 'r')
+            p = os.popen("grep -a eigenval2.xml "+self.scratch+"/calc.save/data-file.xml|tr '\"' ' '|awk '{print $(NF-1)}'", 'r')
             kptdirs2 = [x.strip() for x in p.readlines()]
             p.close()
             kptdirs2.sort()
             kptdirs = kptdirs1+kptdirs2
         else:
-            p = os.popen("grep eigenval.xml "+self.scratch+"/calc.save/data-file.xml|tr '\"' ' '|awk '{print $(NF-1)}'", 'r')
+            p = os.popen("grep -a eigenval.xml "+self.scratch+"/calc.save/data-file.xml|tr '\"' ' '|awk '{print $(NF-1)}'", 'r')
             kptdirs = [x.strip() for x in p.readlines()]
             p.close()
             kptdirs.sort()
@@ -3071,7 +3135,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         else:
             raise ValueError, 'unknown spin component'
         if self.spinpol:
-            p = os.popen('grep "number of k points=" '+self.log+'|tail -1|tr \'=\' \' \'', 'r')
+            p = os.popen('grep -a "number of k points=" '+self.log+'|tail -1|tr \'=\' \' \'', 'r')
             nkp = int(p.readline().split()[4])
             p.close()
             kp = kpoint+nkp/2*s
@@ -3110,7 +3174,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         else:
             raise ValueError, 'unknown spin component'
         if self.spinpol:
-            p = os.popen('grep "number of k points=" '+self.log+'|tail -1|tr \'=\' \' \'', 'r')
+            p = os.popen('grep -a "number of k points=" '+self.log+'|tail -1|tr \'=\' \' \'', 'r')
             nkp = int(p.readline().split()[4])
             p.close()
             kp = kpoint+nkp/2*s
@@ -3492,7 +3556,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         vacuum_energy = average_data[np.abs(np.array(average_data)[..., 0] - vacuum_pos).argmin()][1]
 
         # Get the latest Fermi energy
-        fermi_data = os.popen('grep -n "Fermi" ' + self.log + ' | tail -1', 'r')
+        fermi_data = os.popen('grep -a -n "Fermi" ' + self.log + ' | tail -1', 'r')
         fermi_energy = float(fermi_data.readline().split()[-2])
         fermi_data.close()
 
@@ -3533,11 +3597,13 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         if not hasattr(self, 'natoms'):
             self.atoms2species()
             self.natoms = len(self.atoms)
+	if self.use_environ:
+	    self.writeenvinputfile()
         self.writeinputfile(filename='nonsense.inp',
                             mode='nscf', overridekpts=(1,1,1),
                             overridekptshift=(0,0,0), overridenbands=1,
                             suppressforcecalc=True)
-        self.run_espressox('pw.x', 'nonsense.inp', 'nonsense.log', parallel=False)
+        self.run_espressox(self.exedir+'pw.x', 'nonsense.inp', 'nonsense.log', parallel=False)
         self.occupations = occupationssave
         del self.convergence
         self.convergence = convsave
@@ -3556,7 +3622,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             tail = 'tail'
         else:
             tail = 'tail -1'
-        p = os.popen('grep "convergence has been achieved in" '+self.log+' | '+tail, 'r')
+        p = os.popen('grep -a "convergence has been achieved in" '+self.log+' | '+tail, 'r')
         s = p.readlines()
         p.close()
         if not all:
@@ -3573,7 +3639,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
 
     def get_number_of_bfgs_steps(self):
         """Get total number of internal BFGS steps."""
-        p = os.popen('grep "bfgs converged in" '+self.log+' | tail -1', 'r')
+        p = os.popen('grep -a "bfgs converged in" '+self.log+' | tail -1', 'r')
         s = p.readlines()
         p.close()
         assert len(s) < 2
