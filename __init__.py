@@ -1048,27 +1048,27 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         return nvalence, nel
 
     def writeenvinputfile(self, filename='environ.in'):
-	"""Write Environ input file"""
+        """Write Environ input file"""
         if self.cancalc:
             fname = self.localtmp+'/'+filename
             #f = open(self.localtmp+'/pw.inp', 'w')
         else:
             fname = self.pwinp.split('/')[:-1]+'/'+filename
-	f = open(fname,'w')
-	f.write(' &ENVIRON\n')
-	f.write('   !\n')
-	for key in self.environ_keys:
-	    value=self.environ_keys[key]
-	    if type(value)==str:
-	        f.write('   {} = \'{}\'\n'.format(key, self.environ_keys[key]))
-	    elif 'e' in str(value):
-		value_str=str(value).replace('e','D')
-	        f.write('   {} = {}\n'.format(key, value_str))
-	    else:
-	        f.write('   {} = {}\n'.format(key, self.environ_keys[key]))
-	f.write('   !\n')
-	f.write(' /')
-	f.close()
+        f = open(fname,'w')
+        f.write(' &ENVIRON\n')
+        f.write('   !\n')
+        for key in self.environ_keys:
+            value=self.environ_keys[key]
+            if type(value)==str:
+                f.write('   {} = \'{}\'\n'.format(key, self.environ_keys[key]))
+            elif 'e' in str(value):
+                value_str=str(value).replace('e','D')
+                f.write('   {} = {}\n'.format(key, value_str))
+            else:
+                f.write('   {} = {}\n'.format(key, self.environ_keys[key]))
+        f.write('   !\n')
+        f.write(' /')
+        f.close()
 
     def writeinputfile(self, filename='pw.inp', mode=None,
         overridekpts=None, overridekptshift=None, overridenbands=None,
@@ -1852,22 +1852,22 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                     a = self.cout.readline()
                     s.write(a)
                     if not self.dontcalcforces:
-			while a[:11]!='     Forces':
-			    a = self.cout.readline()
-			    s.write(a)
-			    s.flush()
-			a = self.cout.readline()
-			s.write(a)
-			self.forces = np.empty((self.natoms,3), np.float)
-			for i in range(self.natoms):
-			    a = self.cout.readline()
-			    while a.find('force')<0:
-				s.write(a)
-				a = self.cout.readline()
-			    s.write(a)
-			    forceinp = a.split()
-			    self.forces[i][:] = [float(x) for x in forceinp[len(forceinp)-3:]]
-			self.forces *= rydberg_over_bohr
+                        while a[:11]!='     Forces':
+                            a = self.cout.readline()
+                            s.write(a)
+                            s.flush()
+                        a = self.cout.readline()
+                        s.write(a)
+                        self.forces = np.empty((self.natoms,3), np.float)
+                        for i in range(self.natoms):
+                            a = self.cout.readline()
+                            while a.find('force')<0:
+                                s.write(a)
+                                a = self.cout.readline()
+                            s.write(a)
+                            forceinp = a.split()
+                            self.forces[i][:] = [float(x) for x in forceinp[len(forceinp)-3:]]
+                        self.forces *= rydberg_over_bohr
                     else:
                         self.forces = None
             else:
@@ -1947,8 +1947,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             self.natoms = len(self.atoms)
             #self.spos = zip(s, a.get_scaled_positions()) # UPDATE to have species indices
             self.check_spinpol()
-	    if self.use_environ:
-	        self.writeenvinputfile()
+            if self.use_environ:
+                self.writeenvinputfile()
             self.writeinputfile()
         if self.cancalc:
             self.start()
@@ -1978,9 +1978,9 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                 cdir = os.getcwd()
                 os.chdir(self.localtmp)
                 os.system(site.perHostMpiExec+' cp '+self.localtmp+'/pw.inp '+self.scratch)
-		if self.use_environ:
+                if self.use_environ:
                     os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in '+self.scratch)
-	
+        
                 if self.calcmode!='hund':
                     if not self.proclist:
                         self.cinp, self.cout = site.do_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.parflags+' -in pw.inp')
@@ -1990,21 +1990,21 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                     site.runonly_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.serflags+' -in pw.inp >>'+self.log)
                     os.system("sed s/occupations.*/occupations=\\'fixed\\',/ <"+self.localtmp+"/pw.inp | sed s/ELECTRONS/ELECTRONS\\\\n\ \ startingwfc=\\'file\\',\\\\n\ \ startingpot=\\'file\\',/ | sed s/conv_thr.*/conv_thr="+num2str(self.conv_thr)+",/ | sed s/tot_magnetization.*/tot_magnetization="+num2str(self.totmag)+",/ >"+self.localtmp+"/pw2.inp")
                     os.system(site.perHostMpiExec+' cp '+self.localtmp+'/pw2.inp '+self.scratch)
-		    if self.use_environ:
-			os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in '+self.scratch)
+                    if self.use_environ:
+                        os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in '+self.scratch)
                     self.cinp, self.cout = site.do_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.parflags+' -in pw2.inp')
                 os.chdir(cdir)
             else:
                 os.system('cp '+self.localtmp+'/pw.inp '+self.scratch)
-		if self.use_environ:
-	  	    os.system('cp '+self.localtmp+'/environ.in '+self.scratch)	
+                if self.use_environ:
+                    os.system('cp '+self.localtmp+'/environ.in '+self.scratch)  
                 if self.calcmode!='hund':
                     self.cinp, self.cout = os.popen2('cd '+self.scratch+' ; '+self.exedir+'pw.x '+self.serflags+' -in pw.inp')
                 else:
                     os.system('cd '+self.scratch+' ; '+self.exedir+'pw.x '+self.serflags+' -in pw.inp >>'+self.log)
                     os.system("sed s/occupations.*/occupations=\\'fixed\\',/ <"+self.localtmp+"/pw.inp | sed s/ELECTRONS/ELECTRONS\\\\n\ \ startingwfc=\\'file\\',\\\\n\ \ startingpot=\\'file\\',/ | sed s/conv_thr.*/conv_thr="+num2str(self.conv_thr)+",/ | sed s/tot_magnetization.*/tot_magnetization="+num2str(self.totmag)+",/ >"+self.localtmp+"/pw2.inp")
                     os.system('cp '+self.localtmp+'/pw2.inp '+self.scratch)
-		    if self.use_environ:
+                    if self.use_environ:
                         os.system('cp '+self.localtmp+'/environ.in '+self.scratch)
 
                     self.cinp, self.cout = os.popen2('cd '+self.scratch+' ; '+self.exedir+'pw.x '+self.serflags+' -in pw2.inp')
@@ -2462,7 +2462,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             cdir = os.getcwd()
             os.chdir(self.localtmp)
             os.system(site.perHostMpiExec+' cp '+self.localtmp+'/'+inp+' '+self.scratch)
-	    if self.use_environ:
+            if self.use_environ:
                 os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in'+' '+self.scratch)
 
             if piperead:
@@ -2471,7 +2471,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                 site.runonly_perProcMpiExec(self.scratch, binary+' '+self.parflags+' -in '+inp+ll)
             os.chdir(cdir)
         else:
-	    if self.use_environ:
+            if self.use_environ:
                 os.system('cp '+self.localtmp+'/environ.in'+' '+self.scratch)
 
             os.system('cp '+self.localtmp+'/'+inp+' '+self.scratch)
@@ -2584,8 +2584,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             if not hasattr(self, 'natoms'):
                 self.atoms2species()
                 self.natoms = len(self.atoms)
-	    if self.use_environ:
-		self.writeenvinputfile()
+            if self.use_environ:
+                self.writeenvinputfile()
             self.writeinputfile(filename='pwnscf.inp',
                 mode='nscf', usetetrahedra=tetrahedra, overridekpts=kpts,
                 overridekptshift=kptshift, overridenbands=nbands,
@@ -2689,8 +2689,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         oldnosym = self.nosym
         self.noinv = True
         self.nosym = True
-	if self.use_environ:
-	    self.writeenvinputfile()
+        if self.use_environ:
+            self.writeenvinputfile()
         self.writeinputfile(filename='pwnscf.inp',
             mode='nscf', overridekpts=kptpath,
             overridenbands=nbands, suppressforcecalc=True)
@@ -2972,7 +2972,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             raise ValueError, 'unknown spin component'
         self.run_ppx('charge.inp',
            inputpp=[['plot_num',0],['spin_component',s]],
-            plot=[['fileout',self.topath(cube)],['nx',nx],['ny',ny],['nz',nz]],
+            plot=[['fileout',self.topath(cube)]],
             parallel=False, log='charge.log',output_format=6)
 
     def extract_total_potential(self, spin='both'):
@@ -3518,101 +3518,19 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             parallel=False, log='mideig.log')
     
     def get_dipole_moment(self,charge_type='DDEC6'):
-        """ function to calculate the total dipole of a system in chargemol"""
-        from ase.data import atomic_numbers
-        nx,ny,nz = [int(np.ceil(np.linalg.norm(a)/0.1)) for a in self.atoms.cell]
-
-        self.xsf_charge_density(self.outdir+'/up.xsf',spin='up')#make the xsfs
-        self.xsf_charge_density(self.outdir+'/down.xsf',spin='down')
-        #get information about the number of valence electrons from logfile
-        with open(self.log,'r') as p:
-            s = p.read()
-            p.close()
-        s = s.split('atomic species   valence    mass     pseudopotential\n')[-1]
-        s = s.rsplit('Starting magnetic structure')[0].strip()
-        species_dict = {}
-        for line in s.split('\n'): # dict w/ {atomic_species: [# of valence e, atomic #]}
-            species_dict[line.split()[0]] = [line.split()[1],
-            str(atomic_numbers[''.join([i for i in line.split()[0] if not i.isdigit()])])]
-        print(species_dict)
-        cur_dir = os.getcwd()
-        os.chdir(self.outdir)
-        #we need to convert atomic symbols to atomic numbers in the .xsf file
-        f = open('up.xsf','r')
-        s = f.read()
-        f.close()
-        for species in species_dict.keys():
-            s = s.replace(species,species_dict[species][1])
-        s = s.replace('DATAGRID_3D_UNKNOWN','BEGIN_DATAGRID_3D_RHO:spin_1',1)
-        s = s.replace('END_BLOCK_DATAGRID_3D','')
-        #the datagrid just needs to have the above name
-        f = open('up.xsf','w')
-        f.write(s)
-        f.close()
-        del f
-        f = open('down.xsf')
-        s = f.readreadlines()[8+len(self.atoms):]
-        f.close()
-        s[1] = 'BEGIN_DATAGRID_3D_RHO:spin_2'
-        f = open('down.xsf','w')
-        f.write(s)
-        f.close()
-        os.system('cat up.xsf down.xsf > total.xsf')
-        
-
-        #write Chargemol input file
-        f = open('job_control.txt','w')
-        f.write('<net charge>\n')
-        if self.tot_charge != None:
-            f.write(str(self.tot_charge+'\n'))
-        else:
-            f.write('0\n')
-        f.write('</net charge>\n')
-        f.write('<periodicity along A, B, and C vectors>\n.true.\n.true.\n.true.\n')
-        f.write('</periodicity along A, B, and C vectors>\n')
-        f.write('<atomic densities directory complete path>\n')
-        f.write('/nv/hp13/bcomer3/chargemol_09_26_2017/atomic_densities/\n')
-        f.write('</atomic densities directory complete path>\n')
-        f.write('<input filename>\ntotal.xsf\n</input filename>\n')
-        f.write('<charge type>\n'+charge_type+'\n</charge type>\n')
-        f.write('<number of core electrons>')
-        for sp in species_dict.keys(): #you need to write in '[atomic number] [core electrons]'
-            f.write('\n'+species_dict[sp][1]+'  '+ str(int(float(species_dict[sp][1])-float(species_dict[sp][0]))))
-        f.write('\n</number of core electrons>\n')
-        f.close()
-
-        #run Chargemol, serial is fast enough, make sure you have this code in your path
-        try:
-            os.system('Chargemol')
-        except:
-            try:
-                chargemol_status = os.system('Chargemol_09_26_2017_linux_serial')
-            except:
-                print('unable to run chargemol, ensure chargemol is in your PATH environment variable. This code attempts to run (in serial mode) Chargemol then Chargemol_09_26_2017_linux_serial. If you do not have the chargemol executable it may be obtained at https://sourceforge.net/projects/ddec/files/')
-        #parse the Chargemol output file
-        with open(charge_type+'_even_tempered_net_atomic_charges.xyz','r') as f:
-            txt = f.read()
-        txt,_ = txt.split('The sperically averaged')
-        _,txt = txt.split('traceless quadrupole moment tensor')
-        atm_dipoles =  []
-        charges = []
-        positions = []
-        for line in txt.split('\n')[1:-2]: #Parse Chargemol file
-            atm_dipoles.append(line.split()[6:9])
-            charges.append(line.split()[5])
-            positions.append(line.split()[2:5])
-
+        """
+        function to calculate the total dipole of a system in chargemol
+        """
+        positions, charges, atom_dipoles = self.DDEC_analysis()
         #calculate the total dipole
-        atm_dipoles = np.asarray(atm_dipoles,dtype=np.float)
-        positions = np.asarray(positions,dtype=np.float)
-        charges = np.asarray(charges,dtype=np.float)
+        atom_dipoles = np.asarray(atom_dipoles,dtype=np.float64)*0.529177249 #convert bhor to angstrom
+        positions = np.asarray(positions,dtype=np.float64)
+        charges = np.asarray(charges,dtype=np.float64)
         charges = charges.reshape(len(charges),1)
-        dipoles = atm_dipoles+positions*charges
+        dipoles = atom_dipoles+(positions-self.atoms.get_center_of_mass())*charges
 
-        net_dipole = np.sum(dipoles.astype(np.float),axis=0)
-        os.chdir(cur_dir)
+        net_dipole = np.sum(dipoles.astype(np.float64),axis=0)#e*Angstrom
         return net_dipole
-
        
     def Bader_Analysis(self, quantity='charge'):
         """
@@ -3628,14 +3546,14 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         elif quantity=='magnetization':
             dump_file = 'magnetization_density.cube'
             self.cube_magnetization_density(self.outdir+'/'+dump_file)
-        try:
-            os.chdir(self.outdir)
-            os.system('bader '+dump_file+' > bader.log') 
-            os.wait(30)
-            os.chdir(cur_dir)
-        except:
-            os.chdir(cur_dir) 
-            print("there was a problem running the bader executable, make sure the bader executable is in your PATH environment variable. If you do not have the executable, it can be located at http://theory.cm.utexas.edu/henkelman/code/bader/")
+        #try:    
+        os.chdir(self.outdir)
+        os.system('bader '+dump_file+' > bader.log') 
+        #os.wait(30)
+        os.chdir(cur_dir)
+        #except:
+        #    os.chdir(cur_dir) 
+        #    print("there was a problem running the bader executable, make sure the bader executable is in your PATH environment variable. If you do not have the executable, it can be located at http://theory.cm.utexas.edu/henkelman/code/bader/")
         with  open(self.outdir + '/ACF.dat') as f:
             l = f.readlines()
         bader_output = []
@@ -3754,8 +3672,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         if not hasattr(self, 'natoms'):
             self.atoms2species()
             self.natoms = len(self.atoms)
-	if self.use_environ:
-	    self.writeenvinputfile()
+        if self.use_environ:
+            self.writeenvinputfile()
         self.writeinputfile(filename='nonsense.inp',
                             mode='nscf', overridekpts=(1,1,1),
                             overridekptshift=(0,0,0), overridenbands=1,
@@ -3815,12 +3733,104 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
            
     def todict(self,only_nondefaults=False):
         from collections import OrderedDict
-	input_parameters = OrderedDict()
+        input_parameters = OrderedDict()
         for item in self.defaults.keys():
             if self.defaults[item] == getattr(self,item) and only_nondefaults==True:
                 pass
             else:
                 input_parameters[item]= getattr(self,item)
         return input_parameters
-    def echo():
-        print('echo')
+    
+    
+    def DDEC_analysis(self,charge_type='DDEC6'):
+        from ase.data import atomic_numbers
+        nx,ny,nz = [int(np.ceil(np.linalg.norm(a)/0.1)) for a in self.atoms.cell]
+
+        self.xsf_charge_density(self.outdir+'/up.xsf',spin='up')#make the xsfs
+        self.xsf_charge_density(self.outdir+'/down.xsf',spin='down')
+        #get information about the number of valence electrons from logfile
+        with open(self.log,'r') as p:#we can't use get_nvalence, unfortunately
+            s = p.read()
+            p.close()
+        s = s.split('atomic species   valence    mass     pseudopotential\n')[-1]
+        s = s.rsplit('\n\n')[0].strip()
+        species_dict = {}
+        for line in s.split('\n'): # dict w/ {atomic_species: [# of valence e, atomic #]}
+            species_dict[line.split()[0]] = [line.split()[1],
+            str(atomic_numbers[''.join([i for i in line.split()[0] if not i.isdigit()])])]
+        cur_dir = os.getcwd()
+        os.chdir(self.outdir)
+        #we need to convert atomic symbols to atomic numbers in the .xsf file
+        f = open('up.xsf','r')
+        s = f.read()
+        f.close()
+        for species in species_dict.keys():
+            s = s.replace(species,species_dict[species][1])
+        s = s.replace('DATAGRID_3D_UNKNOWN','BEGIN_DATAGRID_3D_RHO:spin_1',1)
+        if self.spinpol == True:
+            s = s.replace('END_BLOCK_DATAGRID_3D','')
+        #the datagrid just needs to have the above name
+        f = open('up.xsf','w')
+        f.write(s)
+        f.close()
+        del f
+        if self.spinpol == True:
+            f = open('down.xsf','r')
+            s = f.readlines()[8+len(self.atoms):]
+            f.close()
+            s[1] = 'BEGIN_DATAGRID_3D_RHO:spin_2\n'
+            f = open('down.xsf','w')
+            for line in s:
+                f.write(line)
+            f.close()
+            os.system('cat up.xsf down.xsf > total.xsf')
+        else:
+            os.system('cp up.xsf total.xsf')#up/down doesn't matter of non-polarized calcs.
+        #write Chargemol input file
+        f = open('job_control.txt','w')
+        f.write('<net charge>\n')
+        if self.tot_charge != None:
+            f.write(str(self.tot_charge+'\n'))
+        else:
+            f.write('0\n')
+        f.write('</net charge>\n')
+        f.write('<periodicity along A, B, and C vectors>\n.true.\n.true.\n.true.\n')
+        f.write('</periodicity along A, B, and C vectors>\n')
+        f.write('<atomic densities directory complete path>\n')
+        f.write('/nv/hp13/bcomer3/chargemol_09_26_2017/atomic_densities/\n')
+        f.write('</atomic densities directory complete path>\n')
+        f.write('<input filename>\ntotal.xsf\n</input filename>\n')
+        f.write('<charge type>\n'+charge_type+'\n</charge type>\n')
+        f.write('<number of core electrons>')
+        for sp in species_dict.keys(): #you need to write in '[atomic number] [core electrons]'
+            f.write('\n'+species_dict[sp][1]+'  '+ str(int(float(species_dict[sp][1])-float(species_dict[sp][0]))))
+        f.write('\n</number of core electrons>\n')
+        f.close()
+
+        #run Chargemol, serial is fast enough, make sure you have this code in your path
+        try:
+            os.system('Chargemol_09_26_2017_linux_serial')
+        except:
+            try:
+                chargemol_status = os.system('Chargemol_09_26_2017_linux_serial')
+            except:
+                print('unable to run chargemol, ensure chargemol is in your PATH environment variable. This code attempts to run (in serial mode) Chargemol then Chargemol_09_26_2017_linux_serial. If you do not have the chargemol executable it may be obtained at https://sourceforge.net/projects/ddec/files/')
+        #parse the Chargemol output file
+        with open(charge_type+'_even_tempered_net_atomic_charges.xyz','r') as f:
+            txt = f.read()
+        txt,_ = txt.split('The sperically averaged')
+        _,txt = txt.split('traceless quadrupole moment tensor')
+        chargemole_dict = {}
+        atm_dipoles =  []
+        charges = []
+        positions = []
+        for i,line in enumerate(txt.split('\n')[1:-2]): #Parse Chargemol file
+            atm_dipoles.append(line.split()[6:9])
+            charges.append(line.split()[5])
+            positions.append(line.split()[2:5])
+        atom_dipoles = np.asarray(atm_dipoles,dtype=np.float64)#*0.529177249 #convert bhor to angstrom
+        positions = np.asarray(positions,dtype=np.float64)
+        charges = np.asarray(charges,dtype=np.float64)
+        charges = charges.reshape(len(charges),1)
+        os.chdir(cur_dir)
+        return positions,charges, atom_dipoles
