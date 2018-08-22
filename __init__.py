@@ -3797,7 +3797,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         f.write('<periodicity along A, B, and C vectors>\n.true.\n.true.\n.true.\n')
         f.write('</periodicity along A, B, and C vectors>\n')
         f.write('<atomic densities directory complete path>\n')
-        f.write('/nv/hp13/bcomer3/chargemol_09_26_2017/atomic_densities/\n')
+        f.write('/gpfs/pace1/project/chbe-medford/medford-share/builds/chargemol/chargemol_09_26_2017/atomic_densities/\n')
         f.write('</atomic densities directory complete path>\n')
         f.write('<input filename>\ntotal.xsf\n</input filename>\n')
         f.write('<charge type>\n'+charge_type+'\n</charge type>\n')
