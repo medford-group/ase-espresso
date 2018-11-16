@@ -1980,7 +1980,6 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                 os.system(site.perHostMpiExec+' cp '+self.localtmp+'/pw.inp '+self.scratch)
                 if self.use_environ:
                     os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in '+self.scratch)
-        
                 if self.calcmode!='hund':
                     if not self.proclist:
                         self.cinp, self.cout = site.do_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.parflags+' -in pw.inp')
@@ -3517,56 +3516,60 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             plot=[['fileout',self.topath(xsf)]],
             parallel=False, log='mideig.log')
     
-    def get_dipole_moment(self,charge_type='DDEC6'):
+    def get_dipole_moment(self, charge_type='DDEC6'):
         """
-        function to calculate the total dipole of a system in chargemol
+        function to calculate the total dipole of a system. Only charges from Chargemol 
+        (DDEC6 charges) are implemented at present.
         """
         positions, charges, atom_dipoles = self.DDEC_analysis()
-        #calculate the total dipole
-        atom_dipoles = np.asarray(atom_dipoles,dtype=np.float64)*0.529177249 #convert bhor to angstrom
-        positions = np.asarray(positions,dtype=np.float64)
-        charges = np.asarray(charges,dtype=np.float64)
-        charges = charges.reshape(len(charges),1)
-        dipoles = atom_dipoles+(positions-self.atoms.get_center_of_mass())*charges
+        # calculate the total dipole
+        atom_dipoles = np.asarray(atom_dipoles, dtype = np.float64)*0.529177249 # convert bhor to angstrom
+        positions = np.asarray(positions, dtype = np.float64)
+        charges = np.asarray(charges, dtype = np.float64)
+        charges = charges.reshape(len(charges), 1)
+        dipoles = atom_dipoles + (positions - self.atoms.get_center_of_mass()) * charges
 
-        net_dipole = np.sum(dipoles.astype(np.float64),axis=0)#e*Angstrom
+        net_dipole = np.sum(dipoles.astype(np.float64),axis=0)  # e*Angstrom
         return net_dipole
        
-    def Bader_Analysis(self, quantity='charge'):
+    def Bader_Analysis(self, quantity = 'charge'):
         """
         runs Bader charge analysis using Henkelman Group code. Ensure the bader executable is
         in your PATH environment variable.
         
         returns numpy array containing the net charges of each species in order of their index
+        
+        quantity (str):
+            the quantity you want bader to calculate, allowed values are 'charge' and 
+            'magnitization' 
         """
         cur_dir = os.getcwd()
-        if quantity=='charge':
+        if quantity == 'charge':
             dump_file = 'charge_density.cube'
-            self.cube_charge_density(self.outdir+'/'+dump_file)
-        elif quantity=='magnetization':
+            self.cube_charge_density(self.outdir + '/' + dump_file)
+        elif quantity == 'magnetization':
             dump_file = 'magnetization_density.cube'
-            self.cube_magnetization_density(self.outdir+'/'+dump_file)
-        #try:    
-        os.chdir(self.outdir)
-        os.system('bader '+dump_file+' > bader.log') 
-        #os.wait(30)
-        os.chdir(cur_dir)
-        #except:
-        #    os.chdir(cur_dir) 
-        #    print("there was a problem running the bader executable, make sure the bader executable is in your PATH environment variable. If you do not have the executable, it can be located at http://theory.cm.utexas.edu/henkelman/code/bader/")
+            self.cube_magnetization_density(self.outdir + '/' + dump_file)
+        try:    
+            os.chdir(self.outdir)
+            os.system('bader ' + dump_file + ' > bader.log') 
+            os.chdir(cur_dir)
+        except:
+            os.chdir(cur_dir) 
+            print("there was a problem running the bader executable, make sure the bader executable is in your PATH environment variable. If you do not have the executable, it can be located at http://theory.cm.utexas.edu/henkelman/code/bader/")
         with  open(self.outdir + '/ACF.dat') as f:
             l = f.readlines()
         bader_output = []
         valences,valence_dict = self.get_nvalence()
         for line in l[2:-4]:
-            bader_output.append(float(line.split()[4]))  #note that bader gives the number of 
-        if quantity=='charge':                           #electrons associated with a nucleus, not
-            bader_charges=-np.array(bader_output)+valences#net charge
+            bader_output.append(float(line.split()[4]))  # note that bader gives the number of 
+        if quantity == 'charge':                         # electrons associated with a nucleus, not
+            bader_charges =- np.array(bader_output)+valences# net charge
         else:
-            bader_charges=np.array(bader_output)
+            bader_charges = np.array(bader_output)
         return bader_charges
 
-    def find_max_empty_space(self, edir=3):
+    def find_max_empty_space(self, edir = 3):
         """
         Assuming periodic boundary conditions, finds the largest
         continuous segment of free, unoccupied space and returns
@@ -3742,14 +3745,20 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         return input_parameters
     
     
-    def DDEC_analysis(self,charge_type='DDEC6'):
+    def DDEC_analysis(self):
+        """
+        Performs a DDEC6 charge analysis on the system. This is done on both up and down spins
+        by default. You must have a Chargemol executable in your PATH evironment variable for
+        this to work. This can be either 'Chargemol' or the precompiled file named
+        'Chargemol_09_26_2017_linux_serial'.
+        """
         from ase.data import atomic_numbers
-        nx,ny,nz = [int(np.ceil(np.linalg.norm(a)/0.1)) for a in self.atoms.cell]
+        #nx, ny, nz = [int(np.ceil(np.linalg.norm(a) / 0.1)) for a in self.atoms.cell]
 
-        self.xsf_charge_density(self.outdir+'/up.xsf',spin='up')#make the xsfs
-        self.xsf_charge_density(self.outdir+'/down.xsf',spin='down')
-        #get information about the number of valence electrons from logfile
-        with open(self.log,'r') as p:#we can't use get_nvalence, unfortunately
+        self.xsf_charge_density(self.outdir + '/up.xsf', spin='up')  # make the xsfs
+        self.xsf_charge_density(self.outdir + '/down.xsf', spin='down')
+        # get information about the number of valence electrons from logfile
+        with open(self.log, 'r') as p:  # we can't use get_nvalence, unfortunately
             s = p.read()
             p.close()
         s = s.split('atomic species   valence    mass     pseudopotential\n')[-1]
@@ -3760,37 +3769,37 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             str(atomic_numbers[''.join([i for i in line.split()[0] if not i.isdigit()])])]
         cur_dir = os.getcwd()
         os.chdir(self.outdir)
-        #we need to convert atomic symbols to atomic numbers in the .xsf file
-        f = open('up.xsf','r')
+        # we need to convert atomic symbols to atomic numbers in the .xsf file
+        f = open('up.xsf', 'r')
         s = f.read()
         f.close()
         for species in species_dict.keys():
             s = s.replace(species,species_dict[species][1])
-        s = s.replace('DATAGRID_3D_UNKNOWN','BEGIN_DATAGRID_3D_RHO:spin_1',1)
+        s = s.replace('DATAGRID_3D_UNKNOWN', 'BEGIN_DATAGRID_3D_RHO:spin_1', 1)
         if self.spinpol == True:
-            s = s.replace('END_BLOCK_DATAGRID_3D','')
-        #the datagrid just needs to have the above name
-        f = open('up.xsf','w')
+            s = s.replace('END_BLOCK_DATAGRID_3D', '')
+        # the datagrid needs to have the above name
+        f = open('up.xsf', 'w')
         f.write(s)
         f.close()
         del f
         if self.spinpol == True:
-            f = open('down.xsf','r')
-            s = f.readlines()[8+len(self.atoms):]
+            f = open('down.xsf', 'r')
+            s = f.readlines()[8 + len(self.atoms):]
             f.close()
             s[1] = 'BEGIN_DATAGRID_3D_RHO:spin_2\n'
-            f = open('down.xsf','w')
+            f = open('down.xsf', 'w')
             for line in s:
                 f.write(line)
             f.close()
             os.system('cat up.xsf down.xsf > total.xsf')
         else:
-            os.system('cp up.xsf total.xsf')#up/down doesn't matter of non-polarized calcs.
-        #write Chargemol input file
-        f = open('job_control.txt','w')
+            os.system('cp up.xsf total.xsf')  # up/down doesn't matter of non-polarized calcs.
+        # write Chargemol input file
+        f = open('job_control.txt', 'w')
         f.write('<net charge>\n')
         if self.tot_charge != None:
-            f.write(str(self.tot_charge+'\n'))
+            f.write(str(self.tot_charge + '\n'))
         else:
             f.write('0\n')
         f.write('</net charge>\n')
@@ -3800,37 +3809,38 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         f.write('/gpfs/pace1/project/chbe-medford/medford-share/builds/chargemol/chargemol_09_26_2017/atomic_densities/\n')
         f.write('</atomic densities directory complete path>\n')
         f.write('<input filename>\ntotal.xsf\n</input filename>\n')
-        f.write('<charge type>\n'+charge_type+'\n</charge type>\n')
+        f.write('<charge type>\n' + charge_type + '\n</charge type>\n')
         f.write('<number of core electrons>')
         for sp in species_dict.keys(): #you need to write in '[atomic number] [core electrons]'
-            f.write('\n'+species_dict[sp][1]+'  '+ str(int(float(species_dict[sp][1])-float(species_dict[sp][0]))))
+            f.write('\n'+species_dict[sp][1] + '  '+ \
+                    str(int(float(species_dict[sp][1])-float(species_dict[sp][0]))))
         f.write('\n</number of core electrons>\n')
         f.close()
 
-        #run Chargemol, serial is fast enough, make sure you have this code in your path
+        # run Chargemol, serial is fast enough, make sure you have this code in your path
         try:
-            os.system('Chargemol_09_26_2017_linux_serial')
+            os.system('Chargemol')
         except:
             try:
                 chargemol_status = os.system('Chargemol_09_26_2017_linux_serial')
             except:
                 print('unable to run chargemol, ensure chargemol is in your PATH environment variable. This code attempts to run (in serial mode) Chargemol then Chargemol_09_26_2017_linux_serial. If you do not have the chargemol executable it may be obtained at https://sourceforge.net/projects/ddec/files/')
-        #parse the Chargemol output file
-        with open(charge_type+'_even_tempered_net_atomic_charges.xyz','r') as f:
+        # parse the Chargemol output file
+        with open(charge_type + '_even_tempered_net_atomic_charges.xyz', 'r') as f:
             txt = f.read()
-        txt,_ = txt.split('The sperically averaged')
-        _,txt = txt.split('traceless quadrupole moment tensor')
+        txt, _ = txt.split('The sperically averaged')
+        _, txt = txt.split('traceless quadrupole moment tensor')
         chargemole_dict = {}
         atm_dipoles =  []
         charges = []
         positions = []
-        for i,line in enumerate(txt.split('\n')[1:-2]): #Parse Chargemol file
+        for i,line in enumerate(txt.split('\n')[1:-2]):  # Parse Chargemol file
             atm_dipoles.append(line.split()[6:9])
             charges.append(line.split()[5])
             positions.append(line.split()[2:5])
-        atom_dipoles = np.asarray(atm_dipoles,dtype=np.float64)#*0.529177249 #convert bhor to angstrom
-        positions = np.asarray(positions,dtype=np.float64)
-        charges = np.asarray(charges,dtype=np.float64)
-        charges = charges.reshape(len(charges),1)
+        atom_dipoles = np.asarray(atm_dipoles, dtype = np.float64)
+        positions = np.asarray(positions, dtype = np.float64)
+        charges = np.asarray(charges, dtype = np.float64)
+        charges = charges.reshape(len(charges), 1)
         os.chdir(cur_dir)
-        return positions,charges, atom_dipoles
+        return positions, charges, atom_dipoles
