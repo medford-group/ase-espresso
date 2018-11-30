@@ -1048,27 +1048,27 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         return nvalence, nel
 
     def writeenvinputfile(self, filename='environ.in'):
-	"""Write Environ input file"""
+        """Write Environ input file"""
         if self.cancalc:
             fname = self.localtmp+'/'+filename
             #f = open(self.localtmp+'/pw.inp', 'w')
         else:
             fname = self.pwinp.split('/')[:-1]+'/'+filename
-	f = open(fname,'w')
-	f.write(' &ENVIRON\n')
-	f.write('   !\n')
-	for key in self.environ_keys:
-	    value=self.environ_keys[key]
-	    if type(value)==str:
-	        f.write('   {} = \'{}\'\n'.format(key, self.environ_keys[key]))
-	    elif 'e' in str(value):
-		value_str=str(value).replace('e','D')
-	        f.write('   {} = {}\n'.format(key, value_str))
-	    else:
-	        f.write('   {} = {}\n'.format(key, self.environ_keys[key]))
-	f.write('   !\n')
-	f.write(' /')
-	f.close()
+        f = open(fname,'w')
+        f.write(' &ENVIRON\n')
+        f.write('   !\n')
+        for key in self.environ_keys:
+            value=self.environ_keys[key]
+            if type(value)==str:
+                f.write('   {} = \'{}\'\n'.format(key, self.environ_keys[key]))
+            elif 'e' in str(value):
+                value_str=str(value).replace('e','D')
+                f.write('   {} = {}\n'.format(key, value_str))
+            else:
+                f.write('   {} = {}\n'.format(key, self.environ_keys[key]))
+        f.write('   !\n')
+        f.write(' /')
+        f.close()
 
     def writeinputfile(self, filename='pw.inp', mode=None,
         overridekpts=None, overridekptshift=None, overridenbands=None,
@@ -1786,17 +1786,20 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                     break
             if a[:20]=='     convergence NOT':
                 self.stop()
+                self.log_error(error = 'scf cycles did not converge\nincrease maximum number of steps and/or decreasing mixing')
                 raise KohnShamConvergenceError('scf cycles did not converge\nincrease maximum number of steps and/or decreasing mixing')
             elif a[:13]=='     stopping':
                 self.stop()
                 self.checkerror()
                 #if checkerror shouldn't find an error here,
                 #throw this generic error
+                self.log_error(error = 'SCF calculation failed')
                 raise RuntimeError, 'SCF calculation failed'
             elif a=='' and self.calcmode in ('ase3','relax','scf','vc-relax','vc-md','md'):
                 self.checkerror()
                 #if checkerror shouldn't find an error here,
                 #throw this generic error
+                self.log_error(error = 'SCF calculation failed')
                 raise RuntimeError, 'SCF calculation failed'
             self.atom_occ = atom_occ
             self.results['magmoms'] = magmoms
@@ -1852,22 +1855,22 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                     a = self.cout.readline()
                     s.write(a)
                     if not self.dontcalcforces:
-			while a[:11]!='     Forces':
-			    a = self.cout.readline()
-			    s.write(a)
-			    s.flush()
-			a = self.cout.readline()
-			s.write(a)
-			self.forces = np.empty((self.natoms,3), np.float)
-			for i in range(self.natoms):
-			    a = self.cout.readline()
-			    while a.find('force')<0:
-				s.write(a)
-				a = self.cout.readline()
-			    s.write(a)
-			    forceinp = a.split()
-			    self.forces[i][:] = [float(x) for x in forceinp[len(forceinp)-3:]]
-			self.forces *= rydberg_over_bohr
+                        while a[:11]!='     Forces':
+                            a = self.cout.readline()
+                            s.write(a)
+                            s.flush()
+                        a = self.cout.readline()
+                        s.write(a)
+                        self.forces = np.empty((self.natoms,3), np.float)
+                        for i in range(self.natoms):
+                            a = self.cout.readline()
+                            while a.find('force')<0:
+                                s.write(a)
+                                a = self.cout.readline()
+                            s.write(a)
+                            forceinp = a.split()
+                            self.forces[i][:] = [float(x) for x in forceinp[len(forceinp)-3:]]
+                        self.forces *= rydberg_over_bohr
                     else:
                         self.forces = None
             else:
@@ -1925,7 +1928,6 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
 
             self.checkerror()
 
-
     def initialize(self, atoms):
         """ Create the pw.inp input file and start the calculation.
         If onlycreatepwinp is specified in calculator setup,
@@ -1947,8 +1949,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             self.natoms = len(self.atoms)
             #self.spos = zip(s, a.get_scaled_positions()) # UPDATE to have species indices
             self.check_spinpol()
-	    if self.use_environ:
-	        self.writeenvinputfile()
+            if self.use_environ:
+                self.writeenvinputfile()
             self.writeinputfile()
         if self.cancalc:
             self.start()
@@ -1978,9 +1980,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                 cdir = os.getcwd()
                 os.chdir(self.localtmp)
                 os.system(site.perHostMpiExec+' cp '+self.localtmp+'/pw.inp '+self.scratch)
-		if self.use_environ:
+                if self.use_environ:
                     os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in '+self.scratch)
-	
                 if self.calcmode!='hund':
                     if not self.proclist:
                         self.cinp, self.cout = site.do_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.parflags+' -in pw.inp')
@@ -1990,21 +1991,21 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                     site.runonly_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.serflags+' -in pw.inp >>'+self.log)
                     os.system("sed s/occupations.*/occupations=\\'fixed\\',/ <"+self.localtmp+"/pw.inp | sed s/ELECTRONS/ELECTRONS\\\\n\ \ startingwfc=\\'file\\',\\\\n\ \ startingpot=\\'file\\',/ | sed s/conv_thr.*/conv_thr="+num2str(self.conv_thr)+",/ | sed s/tot_magnetization.*/tot_magnetization="+num2str(self.totmag)+",/ >"+self.localtmp+"/pw2.inp")
                     os.system(site.perHostMpiExec+' cp '+self.localtmp+'/pw2.inp '+self.scratch)
-		    if self.use_environ:
-			os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in '+self.scratch)
+                    if self.use_environ:
+                        os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in '+self.scratch)
                     self.cinp, self.cout = site.do_perProcMpiExec(self.scratch,self.exedir+'pw.x '+self.parflags+' -in pw2.inp')
                 os.chdir(cdir)
             else:
                 os.system('cp '+self.localtmp+'/pw.inp '+self.scratch)
-		if self.use_environ:
-	  	    os.system('cp '+self.localtmp+'/environ.in '+self.scratch)	
+                if self.use_environ:
+                    os.system('cp '+self.localtmp+'/environ.in '+self.scratch)  
                 if self.calcmode!='hund':
                     self.cinp, self.cout = os.popen2('cd '+self.scratch+' ; '+self.exedir+'pw.x '+self.serflags+' -in pw.inp')
                 else:
                     os.system('cd '+self.scratch+' ; '+self.exedir+'pw.x '+self.serflags+' -in pw.inp >>'+self.log)
                     os.system("sed s/occupations.*/occupations=\\'fixed\\',/ <"+self.localtmp+"/pw.inp | sed s/ELECTRONS/ELECTRONS\\\\n\ \ startingwfc=\\'file\\',\\\\n\ \ startingpot=\\'file\\',/ | sed s/conv_thr.*/conv_thr="+num2str(self.conv_thr)+",/ | sed s/tot_magnetization.*/tot_magnetization="+num2str(self.totmag)+",/ >"+self.localtmp+"/pw2.inp")
                     os.system('cp '+self.localtmp+'/pw2.inp '+self.scratch)
-		    if self.use_environ:
+                    if self.use_environ:
                         os.system('cp '+self.localtmp+'/environ.in '+self.scratch)
 
                     self.cinp, self.cout = os.popen2('cd '+self.scratch+' ; '+self.exedir+'pw.x '+self.serflags+' -in pw2.inp')
@@ -2248,6 +2249,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         return atoms
 
     def get_potential_energy(self, atoms=None, force_consistent=False):
+        if atoms == None:
+            atoms = self.atoms
         self.update(atoms)
         if force_consistent:
             return self.energy_free
@@ -2266,6 +2269,26 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             xc = np.append(xc, l_)
         assert len(xc) == 32
         return xc
+
+    def get_beef_ensemble(self):
+        f= open(self.log)
+        txt = f.read()
+        f.close()
+        _, E_total = txt.rsplit('total energy              =',1)
+        E_total, _ = E_total.split('Ry',1)
+        E_total = float(E_total.strip())
+        self.results['energy'] = E_total
+        E_total *= rydberg
+        _, ens = txt.rsplit('BEEFens 2000 ensemble energies',1)
+        ens,_ = ens.split('BEEF-vdW xc energy contributions',1)
+        ens_ryd = []
+        for Ei in ens.split('\n'):
+            if Ei.strip():
+                Ei = float(Ei.strip()) + E_total
+                ens_ryd.append(Ei)
+        ens_ryd = np.array(ens_ryd)
+        ens_eV = np.multiply(ens_ryd, rydberg)
+        return ens_eV.tolist()
 
     def get_xc_functional(self):
         return self.xc
@@ -2340,6 +2363,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         try:
             n = int(p.readline().split()[0].strip(':'))
         except:
+            self.log_error(error = 'Espresso executable doesn\'t seem to have been started.')
             raise RuntimeError, 'Espresso executable doesn\'t seem to have been started.'
         p.close()
 
@@ -2366,6 +2390,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         msg = ''
         for e in err:
             msg += e
+        self.log_error(error = msg[:len(msg)-1])
         raise RuntimeError, msg[:len(msg)-1]
 
     def relax_cell_and_atoms(self,
@@ -2462,7 +2487,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             cdir = os.getcwd()
             os.chdir(self.localtmp)
             os.system(site.perHostMpiExec+' cp '+self.localtmp+'/'+inp+' '+self.scratch)
-	    if self.use_environ:
+            if self.use_environ:
                 os.system(site.perHostMpiExec+' cp '+self.localtmp+'/environ.in'+' '+self.scratch)
 
             if piperead:
@@ -2471,7 +2496,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                 site.runonly_perProcMpiExec(self.scratch, binary+' '+self.parflags+' -in '+inp+ll)
             os.chdir(cdir)
         else:
-	    if self.use_environ:
+            if self.use_environ:
                 os.system('cp '+self.localtmp+'/environ.in'+' '+self.scratch)
 
             os.system('cp '+self.localtmp+'/'+inp+' '+self.scratch)
@@ -2584,8 +2609,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             if not hasattr(self, 'natoms'):
                 self.atoms2species()
                 self.natoms = len(self.atoms)
-	    if self.use_environ:
-		self.writeenvinputfile()
+            if self.use_environ:
+                self.writeenvinputfile()
             self.writeinputfile(filename='pwnscf.inp',
                 mode='nscf', usetetrahedra=tetrahedra, overridekpts=kpts,
                 overridekptshift=kptshift, overridenbands=nbands,
@@ -2689,8 +2714,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         oldnosym = self.nosym
         self.noinv = True
         self.nosym = True
-	if self.use_environ:
-	    self.writeenvinputfile()
+        if self.use_environ:
+            self.writeenvinputfile()
         self.writeinputfile(filename='pwnscf.inp',
             mode='nscf', overridekpts=kptpath,
             overridenbands=nbands, suppressforcecalc=True)
@@ -2957,6 +2982,23 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             plot=[['fileout',self.topath(xsf)]],
             parallel=False, log='charge.log')
 
+    def cube_charge_density(self, cube, spin='both'):
+        """
+        Writes the charge density from a DFT calculation
+        to gaussian cube file.
+        """
+        if spin=='both' or spin==0:
+            s = 0
+        elif spin=='up' or spin==1:
+            s = 1
+        elif spin=='down' or spin==2:
+            s = 2
+        else:
+            raise ValueError, 'unknown spin component'
+        self.run_ppx('charge.inp',
+           inputpp=[['plot_num',0],['spin_component',s]],
+            plot=[['fileout',self.topath(cube)]],
+            parallel=False, log='charge.log',output_format=6)
 
     def extract_total_potential(self, spin='both'):
         """
@@ -3112,6 +3154,16 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             inputpp=[['plot_num',6]],
             plot=[['fileout',self.topath(xsf)]],
             parallel=False, log='magdens.log')
+
+    def cube_magnetization_density(self, cube):
+        """
+        Writes the magnetization density from a DFT calculation
+        to a Gaussian Cube file.
+        """
+        self.run_ppx('magdens.inp',
+            inputpp=[['plot_num',6]],
+            plot=[['fileout',self.topath(cube)]],
+            parallel=False, log='magdens.log',output_format=6)
 
 
     def extract_wavefunction_density(self, band, kpoint=0, spin='up',
@@ -3489,9 +3541,61 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             inputpp=[['plot_num',20]],
             plot=[['fileout',self.topath(xsf)]],
             parallel=False, log='mideig.log')
+    
+    def get_dipole_moment(self, charge_type='DDEC6'):
+        """
+        function to calculate the total dipole of a system. Only charges from Chargemol 
+        (DDEC6 charges) are implemented at present.
+        """
+        positions, charges, atom_dipoles = self.DDEC_analysis()
+        # calculate the total dipole
+        atom_dipoles = np.asarray(atom_dipoles, dtype = np.float64)*0.529177249 # convert bhor to angstrom
+        positions = np.asarray(positions, dtype = np.float64)
+        charges = np.asarray(charges, dtype = np.float64)
+        charges = charges.reshape(len(charges), 1)
+        dipoles = atom_dipoles + (positions - self.atoms.get_center_of_mass()) * charges
 
+        net_dipole = np.sum(dipoles.astype(np.float64),axis=0)  # e*Angstrom
+        return net_dipole
+       
+    def Bader_Analysis(self, quantity = 'charge'):
+        """
+        runs Bader charge analysis using Henkelman Group code. Ensure the bader executable is
+        in your PATH environment variable.
+        
+        returns numpy array containing the net charges of each species in order of their index
+        
+        quantity (str):
+            the quantity you want bader to calculate, allowed values are 'charge' and 
+            'magnitization' 
+        """
+        cur_dir = os.getcwd()
+        if quantity == 'charge':
+            dump_file = 'charge_density.cube'
+            self.cube_charge_density(self.outdir + '/' + dump_file)
+        elif quantity == 'magnetization':
+            dump_file = 'magnetization_density.cube'
+            self.cube_magnetization_density(self.outdir + '/' + dump_file)
+        try:    
+            os.chdir(self.outdir)
+            os.system('bader ' + dump_file + ' > bader.log') 
+            os.chdir(cur_dir)
+        except:
+            os.chdir(cur_dir) 
+            print("there was a problem running the bader executable, make sure the bader executable is in your PATH environment variable. If you do not have the executable, it can be located at http://theory.cm.utexas.edu/henkelman/code/bader/")
+        with  open(self.outdir + '/ACF.dat') as f:
+            l = f.readlines()
+        bader_output = []
+        valences,valence_dict = self.get_nvalence()
+        for line in l[2:-4]:
+            bader_output.append(float(line.split()[4]))  # note that bader gives the number of 
+        if quantity == 'charge':                         # electrons associated with a nucleus, not
+            bader_charges =- np.array(bader_output)+valences# net charge
+        else:
+            bader_charges = np.array(bader_output)
+        return bader_charges
 
-    def find_max_empty_space(self, edir=3):
+    def find_max_empty_space(self, edir = 3):
         """
         Assuming periodic boundary conditions, finds the largest
         continuous segment of free, unoccupied space and returns
@@ -3597,8 +3701,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         if not hasattr(self, 'natoms'):
             self.atoms2species()
             self.natoms = len(self.atoms)
-	if self.use_environ:
-	    self.writeenvinputfile()
+        if self.use_environ:
+            self.writeenvinputfile()
         self.writeinputfile(filename='nonsense.inp',
                             mode='nscf', overridekpts=(1,1,1),
                             overridekptshift=(0,0,0), overridenbands=1,
@@ -3656,14 +3760,262 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         else:
             return self.forces
            
-    def todict(self,only_nondefaults=False):
+    def todict(self,only_nondefaults=True):
+        """
+        Coverts calculator object into a dictionary representation appropriate to be placed
+        in a MongoDB. By default this returns only the settings that are not the default values.
+        This function is based loosely off the todict function from the Kitchen Group's VASP
+        environment. in modifying this function please attempt to conform to the naming 
+        conventions found there:
+        https://github.com/jkitchin/vasp/blob/master/vasp/vasp_core.py
+
+        only_nondefaults: bool
+            If set to True, only the non-default keyword arguments are returned. If False all
+            key word arguements are returned
+        """
         from collections import OrderedDict
-	input_parameters = OrderedDict()
+        import getpass
+        dict_version = OrderedDict()
         for item in self.defaults.keys():
-            if self.defaults[item] == getattr(self,item) and only_nondefaults==True:
+            if self.defaults[item] == getattr(self, item) and only_nondefaults == True:
                 pass
+            elif type(getattr(self,item)) == dict:
+                dict_version['path'] = OrderedDict(getattr(self, item))
             else:
-                input_parameters[item]= getattr(self,item)
-        return input_parameters
-    def echo():
-        print('echo')
+                dict_version[item] = getattr(self, item)
+        dict_version['path'] = os.path.abspath('.').split(os.sep)[1:]
+        if self.results == {}:
+            return dict_version
+        if self.beefensemble == True and self.printensemble == True:
+            dict_version['beefensemble'] = self.get_beef_ensemble()
+        for prop in self.implemented_properties:
+            val = self.results.get(prop, None)
+            dict_version[prop] = val 
+        f = self.results.get('forces', None)
+        if f is not None:
+            dict_version['fmax'] = max(np.abs(f.flatten()))
+
+        s = self.results.get('stress', None)
+        if s is not None:
+            dict_version['smax'] = max(np.abs(s.flatten()))
+        
+        dict_version['version'] = self.get_espresso_version()
+        time = self.get_espresso_runtime()
+        if time is not None:
+            dict_version['elapsed-time'] = time
+        dict_version['name'] = 'espresso'
+        if 'parflags' in dict_version:  # We don't care about this
+            del dict_version['parflags']
+        for item in ['xc','pw','dw','spinpol']: # These should always be in
+            dict_version[item] = getattr(self, item)
+        for item in dict_version:
+            if type(dict_version[item]) not in \
+            [dict, list, str, float, int, None, tuple] and \
+            dict_version[item] is not None:  # converting numpy arrays to lists
+                try:
+                    dict_version[item] = dict_version[item].tolist()
+                except:
+                    pass
+        return dict_version
+   
+    def get_espresso_version(self):
+        """
+        reads the espresso version from the espresso output file
+        """
+        p = os.popen('grep -a "Program PWSCF" '+self.log+' | tail -1', 'r')
+        s = p.readlines() 
+        p.close()
+        tmp = s[0].split('PWSCF ')
+        return tmp[1].split(' starts')[0]
+
+    def get_espresso_runtime(self):
+        """
+        reads the walltime from the espresso output file
+        """
+        p = open(self.log,'r')
+        s = p.readlines()[-8]
+        p.close()
+        try:
+            tmp = s.split('CPU')[1]
+            tmp = tmp.split('WALL')[0].strip()
+            return tmp
+        except:
+            return None
+
+    def calc_to_database(self):
+        """
+        Adds the current calculaton to a mongo database
+        """
+        from espresso.mongo import mongo_doc, MongoDatabase
+
+        db = MongoDatabase()
+        atoms = self.atoms  # the atoms object in the calc does not have a calc
+        atoms.set_calculator(self)
+        db.write(mongo_doc(atoms))
+
+    def DDEC_analysis(self,charge_type='DDEC6'):
+        """
+        Performs a DDEC charge analysis on the system. This is done on both up and down spins
+        by default. You must have a Chargemol executable in your PATH evironment variable for
+        this to work. This can be either 'Chargemol' or the precompiled file named
+        'Chargemol_09_26_2017_linux_serial'.
+
+        charge_type: str
+            the method of DDEC charge analysis which is to be used. Options are "DDEC6" and
+            "DDEC3"
+        """
+        from ase.data import atomic_numbers
+        #nx, ny, nz = [int(np.ceil(np.linalg.norm(a) / 0.1)) for a in self.atoms.cell]
+
+        self.xsf_charge_density(self.outdir + '/up.xsf', spin='up')  # make the xsfs
+        self.xsf_charge_density(self.outdir + '/down.xsf', spin='down')
+        # get information about the number of valence electrons from logfile
+        with open(self.log, 'r') as p:  # we can't use get_nvalence, unfortunately
+            s = p.read()
+            p.close()
+        s = s.split('atomic species   valence    mass     pseudopotential\n')[-1]
+        s = s.rsplit('\n\n')[0].strip()
+        species_dict = {}
+        for line in s.split('\n'): # dict w/ {atomic_species: [# of valence e, atomic #]}
+            species_dict[line.split()[0]] = [line.split()[1],
+            str(atomic_numbers[''.join([i for i in line.split()[0] if not i.isdigit()])])]
+        cur_dir = os.getcwd()
+        os.chdir(self.outdir)
+        # we need to convert atomic symbols to atomic numbers in the .xsf file
+        f = open('up.xsf', 'r')
+        s = f.read()
+        f.close()
+        for species in species_dict.keys():
+            s = s.replace(species,species_dict[species][1])
+        s = s.replace('DATAGRID_3D_UNKNOWN', 'BEGIN_DATAGRID_3D_RHO:spin_1', 1)
+        if self.spinpol == True:
+            s = s.replace('END_BLOCK_DATAGRID_3D', '')
+        # the datagrid needs to have the above name
+        f = open('up.xsf', 'w')
+        f.write(s)
+        f.close()
+        del f
+        if self.spinpol == True:
+            f = open('down.xsf', 'r')
+            s = f.readlines()[8 + len(self.atoms):]
+            f.close()
+            s[1] = 'BEGIN_DATAGRID_3D_RHO:spin_2\n'
+            f = open('down.xsf', 'w')
+            for line in s:
+                f.write(line)
+            f.close()
+            os.system('cat up.xsf down.xsf > total.xsf')
+        else:
+            os.system('cp up.xsf total.xsf')  # up/down doesn't matter of non-polarized calcs.
+        # write Chargemol input file
+        f = open('job_control.txt', 'w')
+        f.write('<net charge>\n')
+        if self.tot_charge != None:
+            f.write(str(self.tot_charge + '\n'))
+        else:
+            f.write('0\n')
+        f.write('</net charge>\n')
+        f.write('<periodicity along A, B, and C vectors>\n.true.\n.true.\n.true.\n')
+        f.write('</periodicity along A, B, and C vectors>\n')
+        f.write('<atomic densities directory complete path>\n')
+        f.write('/gpfs/pace1/project/chbe-medford/medford-share/builds/chargemol/chargemol_09_26_2017/atomic_densities/\n')
+        f.write('</atomic densities directory complete path>\n')
+        f.write('<input filename>\ntotal.xsf\n</input filename>\n')
+        f.write('<charge type>\n' + charge_type + '\n</charge type>\n')
+        f.write('<number of core electrons>')
+        for sp in species_dict.keys(): #you need to write in '[atomic number] [core electrons]'
+            f.write('\n'+species_dict[sp][1] + '  '+ \
+                    str(int(float(species_dict[sp][1])-float(species_dict[sp][0]))))
+        f.write('\n</number of core electrons>\n')
+        f.close()
+
+        # run Chargemol, serial is fast enough, make sure you have this code in your path
+        try:
+            os.system('Chargemol')
+        except:
+            try:
+                chargemol_status = os.system('Chargemol_09_26_2017_linux_serial')
+            except:
+                print('unable to run chargemol, ensure chargemol is in your PATH environment variable. This code attempts to run (in serial mode) Chargemol then Chargemol_09_26_2017_linux_serial. If you do not have the chargemol executable it may be obtained at https://sourceforge.net/projects/ddec/files/')
+        # parse the Chargemol output file
+        with open(charge_type + '_even_tempered_net_atomic_charges.xyz', 'r') as f:
+            txt = f.read()
+        txt, _ = txt.split('The sperically averaged')
+        _, txt = txt.split('traceless quadrupole moment tensor')
+        chargemole_dict = {}
+        atm_dipoles =  []
+        charges = []
+        positions = []
+        for i,line in enumerate(txt.split('\n')[1:-2]):  # Parse Chargemol file
+            atm_dipoles.append(line.split()[6:9])
+            charges.append(line.split()[5])
+            positions.append(line.split()[2:5])
+        atom_dipoles = np.asarray(atm_dipoles, dtype = np.float64)
+        positions = np.asarray(positions, dtype = np.float64)
+        charges = np.asarray(charges, dtype = np.float64)
+        charges = charges.reshape(len(charges), 1)
+        os.chdir(cur_dir)
+        return positions, charges, atom_dipoles
+
+    def log_error(self,error=None):
+        """
+        A function that logs details about the software crashing in a database. This 
+        should only be called from the checkerror function, as it assumes it will
+        take in an error from that function as a key word arguement
+
+        error: str
+            the error message from self.checkerror
+        """
+        if error is None:
+            return None
+        from espresso.mongo import mongo_doc, MongoDatabase
+        from collections import OrderedDict
+        db = MongoDatabase(collection='errors') 
+        d = OrderedDict()
+        d['software'] = 'espresso'
+        d['version'] = self.get_espresso_version()
+        d['path'] = os.getcwd()
+        d['user'] = os.environ['USER']
+        
+        try:
+            f = os.popen('qstat -f $PBS_JOBID | grep resources_used.walltime')
+            walltime = f.read()
+            f.close()
+            walltime = walltime.split('=')[1].strip()
+            walltime = walltime.split(':')
+            if len(walltime) == 4:
+                d['walltime'] = int(walltime[0]) * 24 + int(walltime[1]) \
+                                + int(walltime[2]) / 60 + int(walltime[3]) / 3600
+            if len(walltime) == 3:
+                d['walltime'] = int(walltime[0]) + int(walltime[1]) / 60 +\
+                                int(walltime[2]) / 3600
+            d['queue'] = os.environ['PBS_QUEUE']
+        except:
+            pass
+        
+        d['software_error'] = error
+        #err = os.popen('qpeek ' + os.environ['PBS_JOBID'])
+        #d['stderr'] = err
+        d['stderr'] = ''
+        f = open(os.environ['PBS_NODEFILE'])
+        nodes = f.readlines()
+        nodes = [a[:-1]for a in nodes]  # remove the \n's
+        f.close()
+        d['nodes'] = nodes
+        d['class'] = []
+        # several error classes are implmented by default
+        if 'Error in routine read_input' in d['software_error']:
+            d['class'].append('read_input')
+        if 'HYDT' in d['stderr']:
+            d['class'].append('HYDT')
+        if 'failed' in d['stderr']:
+            d['class'].append('scf_failure')
+        if 'scf cycles did not converge' in d['stderr']:
+            d['class'].append('convergence')
+        if 'DFGT' in d['stderr']:
+            d['class'].append('DFGT')
+        if 'find_pbs_node_id' in d['stderr']:
+            d['class'].append('PBS_allocation')
+        if 'S matrix' in d['stderr']:
+            d['class'].append('S_Martix')
+        db.write(d)
