@@ -1786,17 +1786,20 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                     break
             if a[:20]=='     convergence NOT':
                 self.stop()
+                self.log_error(error = 'scf cycles did not converge\nincrease maximum number of steps and/or decreasing mixing')
                 raise KohnShamConvergenceError('scf cycles did not converge\nincrease maximum number of steps and/or decreasing mixing')
             elif a[:13]=='     stopping':
                 self.stop()
                 self.checkerror()
                 #if checkerror shouldn't find an error here,
                 #throw this generic error
+                self.log_error(error = 'SCF calculation failed')
                 raise RuntimeError, 'SCF calculation failed'
             elif a=='' and self.calcmode in ('ase3','relax','scf','vc-relax','vc-md','md'):
                 self.checkerror()
                 #if checkerror shouldn't find an error here,
                 #throw this generic error
+                self.log_error(error = 'SCF calculation failed')
                 raise RuntimeError, 'SCF calculation failed'
             self.atom_occ = atom_occ
             self.results['magmoms'] = magmoms
@@ -1924,7 +1927,6 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                 f.close()
 
             self.checkerror()
-
 
     def initialize(self, atoms):
         """ Create the pw.inp input file and start the calculation.
@@ -2247,6 +2249,8 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         return atoms
 
     def get_potential_energy(self, atoms=None, force_consistent=False):
+        if atoms == None:
+            atoms = self.atoms
         self.update(atoms)
         if force_consistent:
             return self.energy_free
@@ -2265,6 +2269,26 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             xc = np.append(xc, l_)
         assert len(xc) == 32
         return xc
+
+    def get_beef_ensemble(self):
+        f= open(self.log)
+        txt = f.read()
+        f.close()
+        _, E_total = txt.rsplit('total energy              =',1)
+        E_total, _ = E_total.split('Ry',1)
+        E_total = float(E_total.strip())
+        self.results['energy'] = E_total
+        E_total *= rydberg
+        _, ens = txt.rsplit('BEEFens 2000 ensemble energies',1)
+        ens,_ = ens.split('BEEF-vdW xc energy contributions',1)
+        ens_ryd = []
+        for Ei in ens.split('\n'):
+            if Ei.strip():
+                Ei = float(Ei.strip()) + E_total
+                ens_ryd.append(Ei)
+        ens_ryd = np.array(ens_ryd)
+        ens_eV = np.multiply(ens_ryd, rydberg)
+        return ens_eV.tolist()
 
     def get_xc_functional(self):
         return self.xc
@@ -2339,6 +2363,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         try:
             n = int(p.readline().split()[0].strip(':'))
         except:
+            self.log_error(error = 'Espresso executable doesn\'t seem to have been started.')
             raise RuntimeError, 'Espresso executable doesn\'t seem to have been started.'
         p.close()
 
@@ -2365,6 +2390,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         msg = ''
         for e in err:
             msg += e
+        self.log_error(error = msg[:len(msg)-1])
         raise RuntimeError, msg[:len(msg)-1]
 
     def relax_cell_and_atoms(self,
@@ -3734,23 +3760,109 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         else:
             return self.forces
            
-    def todict(self,only_nondefaults=False):
-        from collections import OrderedDict
-        input_parameters = OrderedDict()
-        for item in self.defaults.keys():
-            if self.defaults[item] == getattr(self,item) and only_nondefaults==True:
-                pass
-            else:
-                input_parameters[item]= getattr(self,item)
-        return input_parameters
-    
-    
-    def DDEC_analysis(self):
+    def todict(self,only_nondefaults=True):
         """
-        Performs a DDEC6 charge analysis on the system. This is done on both up and down spins
+        Coverts calculator object into a dictionary representation appropriate to be placed
+        in a MongoDB. By default this returns only the settings that are not the default values.
+        This function is based loosely off the todict function from the Kitchen Group's VASP
+        environment. in modifying this function please attempt to conform to the naming 
+        conventions found there:
+        https://github.com/jkitchin/vasp/blob/master/vasp/vasp_core.py
+
+        only_nondefaults: bool
+            If set to True, only the non-default keyword arguments are returned. If False all
+            key word arguements are returned
+        """
+        from collections import OrderedDict
+        import getpass
+        dict_version = OrderedDict()
+        for item in self.defaults.keys():
+            if self.defaults[item] == getattr(self, item) and only_nondefaults == True:
+                pass
+            elif type(getattr(self,item)) == dict:
+                dict_version['path'] = OrderedDict(getattr(self, item))
+            else:
+                dict_version[item] = getattr(self, item)
+        dict_version['path'] = os.path.abspath('.').split(os.sep)[1:]
+        if self.results == {}:
+            return dict_version
+        if self.beefensemble == True and self.printensemble == True:
+            dict_version['beefensemble'] = self.get_beef_ensemble()
+        for prop in self.implemented_properties:
+            val = self.results.get(prop, None)
+            dict_version[prop] = val 
+        f = self.results.get('forces', None)
+        if f is not None:
+            dict_version['fmax'] = max(np.abs(f.flatten()))
+
+        s = self.results.get('stress', None)
+        if s is not None:
+            dict_version['smax'] = max(np.abs(s.flatten()))
+        
+        dict_version['version'] = self.get_espresso_version()
+        time = self.get_espresso_runtime()
+        if time is not None:
+            dict_version['elapsed-time'] = time
+        dict_version['name'] = 'espresso'
+        if 'parflags' in dict_version:  # We don't care about this
+            del dict_version['parflags']
+        for item in ['xc','pw','dw','spinpol']: # These should always be in
+            dict_version[item] = getattr(self, item)
+        for item in dict_version:
+            if type(dict_version[item]) not in \
+            [dict, list, str, float, int, None, tuple] and \
+            dict_version[item] is not None:  # converting numpy arrays to lists
+                try:
+                    dict_version[item] = dict_version[item].tolist()
+                except:
+                    pass
+        return dict_version
+   
+    def get_espresso_version(self):
+        """
+        reads the espresso version from the espresso output file
+        """
+        p = os.popen('grep -a "Program PWSCF" '+self.log+' | tail -1', 'r')
+        s = p.readlines() 
+        p.close()
+        tmp = s[0].split('PWSCF ')
+        return tmp[1].split(' starts')[0]
+
+    def get_espresso_runtime(self):
+        """
+        reads the walltime from the espresso output file
+        """
+        p = open(self.log,'r')
+        s = p.readlines()[-8]
+        p.close()
+        try:
+            tmp = s.split('CPU')[1]
+            tmp = tmp.split('WALL')[0].strip()
+            return tmp
+        except:
+            return None
+
+    def calc_to_database(self):
+        """
+        Adds the current calculaton to a mongo database
+        """
+        from espresso.mongo import mongo_doc, MongoDatabase
+
+        db = MongoDatabase()
+        atoms = self.atoms  # the atoms object in the calc does not have a calc
+        atoms.set_calculator(self)
+        db.write(mongo_doc(atoms))
+
+    def DDEC_analysis(self,charge_type='DDEC6'):
+        """
+        Performs a DDEC charge analysis on the system. This is done on both up and down spins
         by default. You must have a Chargemol executable in your PATH evironment variable for
         this to work. This can be either 'Chargemol' or the precompiled file named
         'Chargemol_09_26_2017_linux_serial'.
+
+        charge_type: str
+            the method of DDEC charge analysis which is to be used. Options are "DDEC6" and
+            "DDEC3"
         """
         from ase.data import atomic_numbers
         #nx, ny, nz = [int(np.ceil(np.linalg.norm(a) / 0.1)) for a in self.atoms.cell]
@@ -3844,3 +3956,66 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         charges = charges.reshape(len(charges), 1)
         os.chdir(cur_dir)
         return positions, charges, atom_dipoles
+
+    def log_error(self,error=None):
+        """
+        A function that logs details about the software crashing in a database. This 
+        should only be called from the checkerror function, as it assumes it will
+        take in an error from that function as a key word arguement
+
+        error: str
+            the error message from self.checkerror
+        """
+        if error is None:
+            return None
+        from espresso.mongo import mongo_doc, MongoDatabase
+        from collections import OrderedDict
+        db = MongoDatabase(collection='errors') 
+        d = OrderedDict()
+        d['software'] = 'espresso'
+        d['version'] = self.get_espresso_version()
+        d['path'] = os.getcwd()
+        d['user'] = os.environ['USER']
+        
+        try:
+            f = os.popen('qstat -f $PBS_JOBID | grep resources_used.walltime')
+            walltime = f.read()
+            f.close()
+            walltime = walltime.split('=')[1].strip()
+            walltime = walltime.split(':')
+            if len(walltime) == 4:
+                d['walltime'] = int(walltime[0]) * 24 + int(walltime[1]) \
+                                + int(walltime[2]) / 60 + int(walltime[3]) / 3600
+            if len(walltime) == 3:
+                d['walltime'] = int(walltime[0]) + int(walltime[1]) / 60 +\
+                                int(walltime[2]) / 3600
+            d['queue'] = os.environ['PBS_QUEUE']
+        except:
+            pass
+        
+        d['software_error'] = error
+        #err = os.popen('qpeek ' + os.environ['PBS_JOBID'])
+        #d['stderr'] = err
+        d['stderr'] = ''
+        f = open(os.environ['PBS_NODEFILE'])
+        nodes = f.readlines()
+        nodes = [a[:-1]for a in nodes]  # remove the \n's
+        f.close()
+        d['nodes'] = nodes
+        d['class'] = []
+        # several error classes are implmented by default
+        if 'Error in routine read_input' in d['software_error']:
+            d['class'].append('read_input')
+        if 'HYDT' in d['stderr']:
+            d['class'].append('HYDT')
+        if 'failed' in d['stderr']:
+            d['class'].append('scf_failure')
+        if 'scf cycles did not converge' in d['stderr']:
+            d['class'].append('convergence')
+        if 'DFGT' in d['stderr']:
+            d['class'].append('DFGT')
+        if 'find_pbs_node_id' in d['stderr']:
+            d['class'].append('PBS_allocation')
+        if 'S matrix' in d['stderr']:
+            d['class'].append('S_Martix')
+        db.write(d)
