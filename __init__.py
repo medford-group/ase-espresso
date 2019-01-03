@@ -2302,18 +2302,18 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
 
         self.stop()
 
-        p = os.popen('grep -a -3 "total   stress" '+self.log+' | tail -3','r')
+        p = os.popen('grep -a -3 "total   stress" ' + self.log + ' | tail -3','r')
         s = p.readlines()
         p.close()
 
-        if len(s)!=3:
+        if len(s) != 3:
             raise RuntimeError, 'stress was not calculated\nconsider specifying calcstress or running a unit cell relaxation'
 
         stress = np.empty((3,3), np.float)
         for i in range(3):
             stress[i][:] = [float(x) for x in s[i].split()[:3]]
 
-        return stress * rydberg/bohr**3
+        return stress * rydberg / bohr ** 3
 
 
     def get_stress(self, dummyself=None):
@@ -3780,7 +3780,7 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
             if self.defaults[item] == getattr(self, item) and only_nondefaults == True:
                 pass
             elif type(getattr(self,item)) == dict:
-                dict_version['path'] = OrderedDict(getattr(self, item))
+                dict_version[item] = OrderedDict(getattr(self, item))
             else:
                 dict_version[item] = getattr(self, item)
         dict_version['path'] = os.path.abspath('.').split(os.sep)[1:]
@@ -3966,17 +3966,19 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         error: str
             the error message from self.checkerror
         """
+        #return None
         if error is None:
             return None
         from espresso.mongo import mongo_doc, MongoDatabase
         from collections import OrderedDict
-        db = MongoDatabase(collection='errors') 
+        db = MongoDatabase(collection = 'errors') 
         d = OrderedDict()
         d['software'] = 'espresso'
         d['version'] = self.get_espresso_version()
         d['path'] = os.getcwd()
         d['user'] = os.environ['USER']
         
+        d['error'] = error
         try:
             f = os.popen('qstat -f $PBS_JOBID | grep resources_used.walltime')
             walltime = f.read()
@@ -3987,16 +3989,18 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
                 d['walltime'] = int(walltime[0]) * 24 + int(walltime[1]) \
                                 + int(walltime[2]) / 60 + int(walltime[3]) / 3600
             if len(walltime) == 3:
-                d['walltime'] = int(walltime[0]) + int(walltime[1]) / 60 +\
+                d['walltime'] = int(walltime[0]) + int(walltime[1]) / 60 + \
                                 int(walltime[2]) / 3600
             d['queue'] = os.environ['PBS_QUEUE']
         except:
             pass
         
-        d['software_error'] = error
-        #err = os.popen('qpeek ' + os.environ['PBS_JOBID'])
-        #d['stderr'] = err
-        d['stderr'] = ''
+        f = os.popen('pace-qpeek -e ' + os.environ['PBS_JOBID'] + \
+                     ' | awk \'NR==3, NR==-1 {print $0}\'')
+        err = f.read()
+        f.close()
+        d['stderr'] = err
+        #d['stderr'] = ''
         f = open(os.environ['PBS_NODEFILE'])
         nodes = f.readlines()
         nodes = [a[:-1]for a in nodes]  # remove the \n's
@@ -4004,18 +4008,85 @@ svn co --username anonymous http://qeforge.qe-forge.org/svn/q-e/branches/espress
         d['nodes'] = nodes
         d['class'] = []
         # several error classes are implmented by default
-        if 'Error in routine read_input' in d['software_error']:
+        if 'Error in routine read_input' in d['stderr'] or \
+           'Error in routine read_input' in d['error']:
             d['class'].append('read_input')
-        if 'HYDT' in d['stderr']:
+        if 'HYDT' in d['stderr'] or 'HYDT' in d['error']:
             d['class'].append('HYDT')
-        if 'failed' in d['stderr']:
+        if 'failed' in d['stderr'] or 'failed' in d['error']:
             d['class'].append('scf_failure')
-        if 'scf cycles did not converge' in d['stderr']:
+        if 'scf cycles did not converge' in d['stderr'] or \
+           'scf cycles did not converge' in d['error']:
             d['class'].append('convergence')
-        if 'DFGT' in d['stderr']:
+        if 'DFGT' in d['stderr'] or 'DFGT' in d['error']:
             d['class'].append('DFGT')
-        if 'find_pbs_node_id' in d['stderr']:
+        if 'find_pbs_node_id' in d['stderr'] or 'find_pbs_node_id' in d['error']:
             d['class'].append('PBS_allocation')
-        if 'S matrix' in d['stderr']:
+        if 'S matrix' in d['stderr'] or 'S matrix' in d['error']:
             d['class'].append('S_Martix')
         db.write(d)
+
+    def write_gipaw_input(self, job = 'nmr', restart_mode = 'from_scratch', q_gipaw = 0.01,
+                          max_seconds = 10**7, conv_threshold = 10**-14, diagonalization = 'david',
+                          verbosity = 'low', filcurr = None, filfield = None, filnics = None,
+                          use_nmr_macroscopic_shape = False, nmr_macroscopic_shape = (3,3),
+                          spline_ps = True,q_efg = 1, hfi_output_unit = 'MHz', 
+                          hfi_nuclear_g_factor = 0,core_relax_method = 1, prefix = 'calc',
+                          tmp_dir = None):
+        """
+        A function to write input files for the gipaw add-on to quantum espresso.
+        The environment varible $GIPAW_PATH must point to the executable gipaw
+        file.
+
+        https://github.com/dceresoli/qe-gipaw
+        """
+        if tmp_dir == None:
+            tmp_dir = self.localtmp
+        defaults = dict(job = 'nmr', restart_mode = 'from_scratch', q_gipaw = 0.01,
+                          max_seconds = 10**7, conv_threshold = 10**-14, diagonalization = 'david',
+                          verbosity = 'low', filcurr = None, filfield = None, filnics = None,
+                          use_nmr_macroscopic_shape = False, nmr_macroscopic_shape = (3,3),
+                          spline_ps = True,q_efg = 1, hfi_output_unit = 'MHz', 
+                          hfi_nuclear_g_factor = 0, core_relax_method = 1
+                          )
+        input_args = ['job','restart_mode','q_gipaw','max_seconds','conv_threshold',
+                      'diagonalization','verbosity','filcurr','filfield','filnics',
+                      'use_nmr_macroscopic_shape','nmr_macroscopic_shape','spline_ps',
+                      'q_efg','hfi_output_unit','hfi_nuclear_g_factor','core_relax_method']
+        #for arg in kwargs:
+        #    print(arg)
+        #    if arg not in input_args:
+        #        raise ValueError('Unknow arguement: ' + arg)
+        job_types = ['nmr', 'fsum', 'efg', 'g_tensor', 'hyperfine']
+        restart_modes = ['from_scratch', 'restart']
+        if self.outdir is not None:
+            f = open('gp.inp','w')
+        else:
+            f = open('gp.inp','w')
+        f.write('&inputgipaw\n')
+        f.write('   job = \'{}\'\n'.format(job))
+        f.write('   prefix = \'calc\'\n')
+        f.write('   tmp_dir = \'./\'\n')
+        f.write('   spline_ps = .{}.\n'.format(str(spline_ps).lower()))
+        f.write('   q_gipaw = {}\n'.format(q_gipaw))
+        f.write('   restart_mode = \'{}\'\n'.format(restart_mode))
+        for arg in input_args:
+            if arg not in ['spline_ps','q_gipaw','restart_mode','job']:
+                if locals()[arg] == defaults[arg]:
+                    continue
+                elif locals()[arg] == None:
+                    continue
+                elif type(locals()[arg]) == bool:
+                    f.write('   ' + arg + ' = .' + str(locals()[arg]).lower() + '.\n')
+                else:
+                    f.write('   ' + arg + ' = \'' + locals()[arg] + '\'\n')    
+        f.write('/\n')
+
+    def run_gipaw(self,**kwargs):
+        cdir = os.getcwd()
+        os.chdir(self.localtmp)
+        self.write_gipaw_input(**kwargs)
+        f = open(os.environ['PBS_NODEFILE'],'r')
+        n_procs = len(f.readlines())
+        os.system('mpirun -np '+str(n_procs)+' gipaw.x > gp.log')
+        os.chdir(cdir)
